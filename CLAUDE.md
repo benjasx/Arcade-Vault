@@ -27,6 +27,10 @@ El bloque de instrucciones para agentes al final de `AGENTS.md` lo regenera `nex
 
 No hay framework de tests configurado.
 
+## Skills
+
+Usa siempre /frontend-design Para diseñar la interfaz de usuario
+
 ## Stack y convenciones
 
 - **App Router** (`app/`), sin `src/`. Server Components por defecto; marca `"use client"` solo donde haga falta interactividad.
