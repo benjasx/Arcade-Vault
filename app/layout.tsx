@@ -5,6 +5,7 @@ import {
   Courier_Prime,
 } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { Nav } from "@/components/nav";
 import "./globals.css";
 
 const pressStart2P = Press_Start_2P({
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <div className="av-bg" />
         <div className="av-noise" />
         <AuthProvider>
+          <Nav />
           <main className="av-main">{children}</main>
         </AuthProvider>
         <footer
