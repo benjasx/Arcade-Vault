@@ -4,6 +4,7 @@ import {
   JetBrains_Mono,
   Courier_Prime,
 } from "next/font/google";
+import { AuthProvider } from "@/components/auth-provider";
 import "./globals.css";
 
 const pressStart2P = Press_Start_2P({
@@ -40,7 +41,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <div className="av-bg" />
         <div className="av-noise" />
-        <main className="av-main">{children}</main>
+        <AuthProvider>
+          <main className="av-main">{children}</main>
+        </AuthProvider>
         <footer
           style={{
             borderTop: "1px solid var(--line)",
