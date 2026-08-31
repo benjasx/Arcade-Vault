@@ -28,10 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Hidratación client-only: leemos localStorage tras montar y marcamos `ready`
+  // para que los consumidores no pinten UI de usuario durante el SSR/primer render.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const parsed = raw ? (JSON.parse(raw) as AuthUser | null) : null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync one-shot desde localStorage
       if (parsed && typeof parsed.name === "string") setUser(parsed);
     } catch {
       // localStorage no disponible (modo privado) o JSON corrupto: seguimos sin usuario

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Prototipo de referencia: SPA estático (React UMD + Babel), no es parte del build.
+    "references/**",
   ]),
 ]);
 

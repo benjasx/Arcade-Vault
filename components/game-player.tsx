@@ -12,16 +12,14 @@ export function GamePlayer({ game }: { game: Game }) {
 
   const [score, setScore] = useState(0);
   const [lives] = useState(3);
-  const [level, setLevel] = useState(1);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
-  const [name, setName] = useState("INVITADO");
+  // Nombre inicial: el del usuario si hay sesión, si no "INVITADO".
+  const [name, setName] = useState<string>(() => user?.name ?? "INVITADO");
   const [saved, setSaved] = useState(false);
 
-  // Nombre inicial: el del usuario si hay sesión, si no "INVITADO".
-  useEffect(() => {
-    if (user) setName(user.name);
-  }, [user]);
+  // Nivel derivado del score: sube al cruzar cada umbral de 2500 puntos.
+  const level = Math.floor(score / 2500) + 1;
 
   useEffect(() => {
     if (over || paused) return;
@@ -32,14 +30,9 @@ export function GamePlayer({ game }: { game: Game }) {
     return () => clearInterval(t);
   }, [over, paused]);
 
-  useEffect(() => {
-    if (score > 0 && score % 2500 < 100) setLevel((l) => l + 1);
-  }, [score]);
-
   const endGame = () => setOver(true);
   const restart = () => {
     setScore(0);
-    setLevel(1);
     setPaused(false);
     setOver(false);
     setSaved(false);
