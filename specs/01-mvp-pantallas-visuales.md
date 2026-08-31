@@ -1,6 +1,6 @@
 # SPEC 01 — MVP visual: todas las pantallas del prototipo en Next.js
 
-> **Status:** Draft
+> **Status:** aprobado
 > **Depends on:** —
 > **Date:** 2026-08-30
 > **Objective:** Portar las cinco pantallas del prototipo `references/templates/` (biblioteca, detalle, player, auth, salón) más navegación, footer y fondo a Next.js 16 App Router, solo como capa visual y sin motor de juego.
@@ -61,22 +61,22 @@ export type GameCategory = "ARCADE" | "PUZZLE" | "SHOOTER" | "VERSUS";
 export type NeonColor = "cyan" | "magenta" | "yellow" | "green";
 
 export interface Game {
-  id: string;          // "bloque-buster"
-  title: string;       // "BLOQUE BUSTER"
+  id: string; // "bloque-buster"
+  title: string; // "BLOQUE BUSTER"
   short: string;
   long: string;
   cat: GameCategory;
-  cover: string;       // clase CSS: "cover-bricks"
+  cover: string; // clase CSS: "cover-bricks"
   color: NeonColor;
   best: number;
-  plays: string;       // "12.4K"
+  plays: string; // "12.4K"
 }
 
 export interface ScoreRow {
   rank: number;
   name: string;
   score: number;
-  date: string;        // "07/03/2026"
+  date: string; // "07/03/2026"
 }
 
 export const GAMES: Game[];
@@ -89,26 +89,28 @@ Módulo nuevo `lib/scores.ts` (persistencia de puntuaciones guardadas):
 
 ```ts
 export interface SavedScore {
-  game: string;   // Game["id"]
+  game: string; // Game["id"]
   score: number;
-  name: string;   // iniciales, <= 10 chars, mayúsculas
-  at: number;     // Date.now()
+  name: string; // iniciales, <= 10 chars, mayúsculas
+  at: number; // Date.now()
 }
 
 export function saveScore(entry: Omit<SavedScore, "at">): void; // append a av_scores
-export function getScores(): SavedScore[];                      // lectura tolerante a fallos
+export function getScores(): SavedScore[]; // lectura tolerante a fallos
 ```
 
 Contexto de sesión `components/auth-provider.tsx`:
 
 ```ts
-export interface AuthUser { name: string } // iniciales en mayúsculas, <= 10 chars
+export interface AuthUser {
+  name: string;
+} // iniciales en mayúsculas, <= 10 chars
 
 export interface AuthContextValue {
   user: AuthUser | null;
-  ready: boolean;              // true tras leer localStorage en cliente (evita mismatch de hidratación)
-  signIn: (name: string) => void;   // guarda av_user
-  signOut: () => void;              // borra av_user
+  ready: boolean; // true tras leer localStorage en cliente (evita mismatch de hidratación)
+  signIn: (name: string) => void; // guarda av_user
+  signOut: () => void; // borra av_user
 }
 ```
 
@@ -187,13 +189,13 @@ Convenciones:
 
 ## Risks
 
-| Riesgo | Mitigación |
-| --- | --- |
-| `localStorage` no disponible en SSR o modo privado | `lib/scores.ts` y `AuthProvider` protegidos con `typeof window === "undefined"` y `try/catch`; la app funciona sin persistir. |
-| Mismatch de hidratación al pintar UI derivada de `localStorage` (usuario en Nav, fila del salón) | `AuthProvider` expone `ready`; los consumidores renderizan el estado "sin usuario" hasta que `ready` es `true`. |
-| Next 16: `params` es `Promise` y los tipos `PageProps` son globals autogenerados | Las páginas `await params`; no importar tipos de `next`; regenerar con `next dev` / `next build`. Consultar `node_modules/next/dist/docs/` antes de escribir el código de rutas dinámicas. |
-| `next/font` con `Press Start 2P` (subset limitado) podría no cubrir glifos | Cadena de fallback `system-ui, monospace` en `--pixel`; el texto es todo ASCII en mayúsculas. |
-| El efecto tilt de `GameCard` manipula `style.transform` directamente | Portar tal cual con `ref`; sin `transform` en JSX que compita. Aceptable para MVP. |
+| Riesgo                                                                                           | Mitigación                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `localStorage` no disponible en SSR o modo privado                                               | `lib/scores.ts` y `AuthProvider` protegidos con `typeof window === "undefined"` y `try/catch`; la app funciona sin persistir.                                                              |
+| Mismatch de hidratación al pintar UI derivada de `localStorage` (usuario en Nav, fila del salón) | `AuthProvider` expone `ready`; los consumidores renderizan el estado "sin usuario" hasta que `ready` es `true`.                                                                            |
+| Next 16: `params` es `Promise` y los tipos `PageProps` son globals autogenerados                 | Las páginas `await params`; no importar tipos de `next`; regenerar con `next dev` / `next build`. Consultar `node_modules/next/dist/docs/` antes de escribir el código de rutas dinámicas. |
+| `next/font` con `Press Start 2P` (subset limitado) podría no cubrir glifos                       | Cadena de fallback `system-ui, monospace` en `--pixel`; el texto es todo ASCII en mayúsculas.                                                                                              |
+| El efecto tilt de `GameCard` manipula `style.transform` directamente                             | Portar tal cual con `ref`; sin `transform` en JSX que compita. Aceptable para MVP.                                                                                                         |
 
 ---
 
