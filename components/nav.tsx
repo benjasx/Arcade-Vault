@@ -10,8 +10,10 @@ export function Nav() {
   const pathname = usePathname();
   const { user, ready, signOut } = useAuth();
 
-  const libActive = pathname === "/" || pathname.startsWith("/juego");
+  const inicioActive = pathname === "/";
+  const libActive = pathname.startsWith("/juego");
   const salonActive = pathname === "/salon";
+  const acercaActive = pathname === "/acerca-de";
   const loginActive = pathname === "/login";
 
   const close = () => setOpen(false);
@@ -27,11 +29,17 @@ export function Nav() {
           </div>
         </Link>
         <div className="links">
-          <Link href="/" className={libActive ? "active" : ""}>
+          <Link href="/" className={inicioActive ? "active" : ""}>
+            Inicio
+          </Link>
+          <Link href="/juegos" className={libActive ? "active" : ""}>
             Biblioteca
           </Link>
           <Link href="/salon" className={salonActive ? "active" : ""}>
             Salón de la Fama
+          </Link>
+          <Link href="/acerca-de" className={acercaActive ? "active" : ""}>
+            Acerca de
           </Link>
         </div>
         <div className="spacer" />
@@ -65,8 +73,11 @@ export function Nav() {
         <div className="pixel neon-cyan" style={{ fontSize: 11, marginBottom: 16 }}>
           MENÚ
         </div>
+        <Link href="/" className={inicioActive ? "active" : ""} onClick={close}>
+          Inicio
+        </Link>
         <Link
-          href="/"
+          href="/juegos"
           className={libActive ? "active" : ""}
           onClick={close}
         >
@@ -78,6 +89,13 @@ export function Nav() {
           onClick={close}
         >
           Salón de la Fama
+        </Link>
+        <Link
+          href="/acerca-de"
+          className={acercaActive ? "active" : ""}
+          onClick={close}
+        >
+          Acerca de
         </Link>
         <Link
           href="/login"
