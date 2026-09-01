@@ -16,7 +16,7 @@ export default function NotFound() {
         <p style={{ color: "var(--ink-dim)", margin: "16px 0 24px" }}>
           Esta ruta no existe en el Vault. Quizá la máquina se tragó la moneda.
         </p>
-        <Link className="btn lg" href="/">
+        <Link className="btn lg" href="/juegos">
           VOLVER AL VAULT
         </Link>
       </div>

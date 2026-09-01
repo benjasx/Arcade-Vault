@@ -16,7 +16,7 @@ export function AuthForm() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     signIn(user || "PLAYER1");
-    router.push("/");
+    router.push("/juegos");
   };
 
   return (
@@ -97,7 +97,7 @@ export function AuthForm() {
           style={{ width: "100%", marginTop: 10 }}
           onClick={() => {
             signOut();
-            router.push("/");
+            router.push("/juegos");
           }}
         >
           JUGAR COMO INVITADO

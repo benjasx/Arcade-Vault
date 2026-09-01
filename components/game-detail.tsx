@@ -64,7 +64,10 @@ export function GameDetail({
             >
               ▶  JUGAR AHORA
             </button>
-            <button className="btn ghost lg" onClick={() => router.push("/")}>
+            <button
+              className="btn ghost lg"
+              onClick={() => router.push("/juegos")}
+            >
               VOLVER AL VAULT
             </button>
           </div>
