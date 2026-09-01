@@ -114,7 +114,8 @@ Convenciones (heredadas de SPEC 01):
 - [ ] "VOLVER AL VAULT" en detalle y en el modal de fin del player, "VOLVER A LA BIBLIOTECA" en el salón y "VOLVER AL VAULT" en la página 404 navegan a `/juegos`.
 - [ ] Iniciar sesión en `/login` y "JUGAR COMO INVITADO" redirigen a `/juegos`.
 - [ ] No hay warnings de hidratación de React en consola en `/` ni en `/juegos`.
-- [ ] No se ha añadido enlace "Acerca de" ni ruta de about; el bloque CSS `.gp` no está en `globals.css`.
+- [ ] El enlace "Acerca de" del nav apunta a `/acerca-de` y esa ruta renderiza la página 404 (no existe `page.tsx`); no se ha creado la página real de about ni el bloque CSS ABOUT PAGE.
+- [ ] El bloque CSS `.gp` no está en `globals.css`.
 
 ---
 
@@ -126,6 +127,7 @@ Convenciones (heredadas de SPEC 01):
 - **Sí:** reescribir los "volver" internos (`/` → `/juegos`) en detalle, player, salón, auth y 404. Es el mínimo para no romper la navegación tras mover la ruta.
 - **No:** añadir `redirects` de `/juegos`↔`/`. No hay enlaces externos que proteger en un MVP; los internos se reescriben.
 - **Sí:** solo el enlace "Inicio" en el nav. La página "Acerca de" no existe todavía; añadir su enlace dejaría un destino muerto.
+- **Desviación (a petición del usuario, tras aprobar la spec):** se añade también el enlace "Acerca de" → `/acerca-de` en barra y panel móvil. La ruta no tiene `page.tsx`, así que Next renderiza `app/not-found.tsx` (404). La página real de "Acerca de" sigue fuera de scope y va en otra spec.
 - **No:** portar `about.jsx` en esta spec. Es una pantalla independiente (hero + formulario de contacto simulado + animación de terminal); merece su propia spec.
 - **Sí:** arrays de "Actividad en vivo" en línea dentro de `home-screen.tsx`. Son relleno presentacional, no datos reales; moverlos a `lib/data.ts` sugeriría que alimentan algo.
 - **No:** derivar el ticker/top de `seededScores` o `GAMES`. Cambiaría el contenido respecto al prototipo sin beneficio.
