@@ -4,6 +4,8 @@ import {
   JetBrains_Mono,
   Courier_Prime,
 } from "next/font/google";
+import { AuthProvider } from "@/components/auth-provider";
+import { Nav } from "@/components/nav";
 import "./globals.css";
 
 const pressStart2P = Press_Start_2P({
@@ -37,7 +39,29 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${pressStart2P.variable} ${jetbrainsMono.variable} ${courierPrime.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <div className="av-bg" />
+        <div className="av-noise" />
+        <div className="av-frame">
+          <AuthProvider>
+            <Nav />
+            <main className="av-main">{children}</main>
+          </AuthProvider>
+          <footer
+          style={{
+            borderTop: "1px solid var(--line)",
+            padding: "20px 32px",
+            textAlign: "center",
+            color: "var(--ink-faint)",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: "0.16em",
+          }}
+        >
+          © 2026 ARCADE VAULT · HECHO CON PIXELES Y NEÓN · v2.6.0
+          </footer>
+        </div>
+      </body>
     </html>
   );
 }
