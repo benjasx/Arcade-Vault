@@ -1,6 +1,6 @@
 # SPEC 02 — Homepage: landing en la raíz y biblioteca en /juegos
 
-> **Status:** aprobado
+> **Status:** implementado
 > **Depends on:** SPEC 01
 > **Date:** 2026-08-31
 > **Objective:** Portar la landing `references/templates/home-about/home.jsx` a `app/page.tsx`, mover la biblioteca actual a `/juegos` y añadir el enlace "Inicio" a la navegación.
