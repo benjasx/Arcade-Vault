@@ -42,11 +42,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <div className="av-bg" />
         <div className="av-noise" />
-        <AuthProvider>
-          <Nav />
-          <main className="av-main">{children}</main>
-        </AuthProvider>
-        <footer
+        <div className="av-frame">
+          <AuthProvider>
+            <Nav />
+            <main className="av-main">{children}</main>
+          </AuthProvider>
+          <footer
           style={{
             borderTop: "1px solid var(--line)",
             padding: "20px 32px",
@@ -58,7 +59,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           }}
         >
           © 2026 ARCADE VAULT · HECHO CON PIXELES Y NEÓN · v2.6.0
-        </footer>
+          </footer>
+        </div>
       </body>
     </html>
   );

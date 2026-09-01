@@ -62,7 +62,10 @@ body {
   letter-spacing: 0.01em;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  /* app frame (was #root in the prototype) */
+}
+
+/* app frame (was #root in the prototype) */
+.av-frame {
   position: relative;
   z-index: 2;
   display: flex;
