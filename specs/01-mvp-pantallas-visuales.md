@@ -1,6 +1,6 @@
 # SPEC 01 — MVP visual: todas las pantallas del prototipo en Next.js
 
-> **Status:** aprobado
+> **Status:** implementado
 > **Depends on:** —
 > **Date:** 2026-08-30
 > **Objective:** Portar las cinco pantallas del prototipo `references/templates/` (biblioteca, detalle, player, auth, salón) más navegación, footer y fondo a Next.js 16 App Router, solo como capa visual y sin motor de juego.
