@@ -79,7 +79,11 @@ export async function POST(request: Request) {
   }
 
   if (sendError) {
-    console.error("[api/contact] Error de Resend:", sendError);
+    const detail =
+      sendError instanceof Error
+        ? sendError.message
+        : JSON.stringify(sendError);
+    console.error(`[api/contact] Error de Resend: ${detail}`);
     return json({ ok: false, error: "No se pudo enviar el mensaje." }, 502);
   }
 
