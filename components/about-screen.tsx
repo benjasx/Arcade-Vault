@@ -94,15 +94,49 @@ export function AboutScreen() {
   useReveal();
 
   const [form, setForm] = useState({ name: "", email: "", msg: "", company: "" });
+  const [sent, setSent] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.msg.trim()) {
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const msg = form.msg.trim();
+    if (!name || !email || !msg) {
       setShake(true);
       setTimeout(() => setShake(false), 400);
       return;
     }
+
+    setError(null);
+    setSending(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, msg, company: form.company }),
+      });
+      if (res.ok) {
+        setSent(name);
+      } else {
+        const data: { error?: string } | null = await res
+          .json()
+          .catch(() => null);
+        setError(data?.error || "No se pudo enviar el mensaje. Inténtalo de nuevo.");
+      }
+    } catch {
+      setError("No se pudo conectar. Revisa tu conexión e inténtalo de nuevo.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const reset = () => {
+    setSent(null);
+    setError(null);
+    setForm({ name: "", email: "", msg: "", company: "" });
   };
 
   return (
@@ -172,52 +206,96 @@ export function AboutScreen() {
             className={"contact-form" + (shake ? " shake" : "")}
             onSubmit={onSubmit}
           >
-            <div className="field">
-              <label>NOMBRE</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="px_kai"
-              />
-            </div>
-            <div className="field">
-              <label>CORREO ELECTRÓNICO</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="jugador@vault.gg"
-              />
-            </div>
-            <div className="field">
-              <label>MENSAJE</label>
-              <textarea
-                rows={5}
-                value={form.msg}
-                onChange={(e) => setForm({ ...form, msg: e.target.value })}
-                placeholder="Cuéntanos qué tienes en mente…"
-              />
-            </div>
+            {!sent ? (
+              <>
+                <div className="field">
+                  <label>NOMBRE</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="px_kai"
+                  />
+                </div>
+                <div className="field">
+                  <label>CORREO ELECTRÓNICO</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="jugador@vault.gg"
+                  />
+                </div>
+                <div className="field">
+                  <label>MENSAJE</label>
+                  <textarea
+                    rows={5}
+                    value={form.msg}
+                    onChange={(e) => setForm({ ...form, msg: e.target.value })}
+                    placeholder="Cuéntanos qué tienes en mente…"
+                  />
+                </div>
 
-            {/* honeypot: oculto y fuera del orden de tabulación */}
-            <div className="field" style={{ display: "none" }} aria-hidden="true">
-              <label>COMPANY</label>
-              <input
-                type="text"
-                tabIndex={-1}
-                autoComplete="off"
-                value={form.company}
-                onChange={(e) => setForm({ ...form, company: e.target.value })}
-              />
-            </div>
+                {/* honeypot: oculto y fuera del orden de tabulación */}
+                <div
+                  className="field"
+                  style={{ display: "none" }}
+                  aria-hidden="true"
+                >
+                  <label>COMPANY</label>
+                  <input
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={form.company}
+                    onChange={(e) =>
+                      setForm({ ...form, company: e.target.value })
+                    }
+                  />
+                </div>
 
-            <button
-              className="btn xl press"
-              type="submit"
-              style={{ width: "100%" }}
-            >
-              ▶ ENVIAR MENSAJE
-            </button>
+                <button
+                  className="btn xl press"
+                  type="submit"
+                  disabled={sending}
+                  style={{ width: "100%" }}
+                >
+                  {sending ? "ENVIANDO…" : "▶ ENVIAR MENSAJE"}
+                </button>
+
+                {error && <div className="contact-error">{error}</div>}
+              </>
+            ) : (
+              <div className="terminal-success">
+                <div className="term-bar">
+                  <span className="dot r" />
+                  <span className="dot y" />
+                  <span className="dot g" />
+                  <span className="term-title">VAULT-OS // TERMINAL</span>
+                </div>
+                <div className="term-body">
+                  <div className="line">
+                    <span className="prompt">vault@arcade:~$</span>{" "}
+                    ./send_message --to=team
+                  </div>
+                  <div className="line dim">[OK] Conectando con servidor…</div>
+                  <div className="line dim">[OK] Validando contenido…</div>
+                  <div className="line dim">[OK] Transmitiendo paquete…</div>
+                  <div className="line success">
+                    &gt; MENSAJE RECIBIDO. TE RESPONDEREMOS PRONTO. GRACIAS,{" "}
+                    {sent.toUpperCase()}.<span className="caret">_</span>
+                  </div>
+                  <div style={{ marginTop: 18 }}>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      onClick={reset}
+                    >
+                      ENVIAR OTRO MENSAJE
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </form>
         </div>
       </section>
