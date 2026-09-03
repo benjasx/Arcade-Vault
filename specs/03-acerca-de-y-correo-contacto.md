@@ -1,6 +1,6 @@
 # SPEC 03 — Página "Acerca de" y envío de correo del formulario de contacto
 
-> **Status:** aprobado
+> **Status:** implementado
 > **Depends on:** SPEC 01, SPEC 02
 > **Date:** 2026-09-02
 > **Objective:** Portar la página "Acerca de" de `references/templates/home-about/about.jsx` a la ruta `/acerca-de` y conectar su formulario de contacto a un Route Handler que envía la notificación al equipo con Resend.
