@@ -4,3 +4,6 @@
 [     798ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
 [    1430ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
 [    1491ms] [LOG] [Fast Refresh] done in 168ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
+[  189431ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
+[  190712ms] [LOG] [Fast Refresh] done in 1313ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
+[  191069ms] [LOG] [Fast Refresh] done in 1313ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:782
