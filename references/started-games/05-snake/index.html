@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrapper">
+    <h1 class="game-title" data-text="SNAKE">SNAKE</h1>
+
+    <div class="hud">
+      <div class="hud-cell">
+        <span class="label">SCORE</span>
+        <span class="value" id="score">0</span>
+      </div>
+      <div class="hud-cell">
+        <span class="label">HI-SCORE</span>
+        <span class="value" id="hiscore">0</span>
+      </div>
+      <div class="hud-cell">
+        <span class="label">SPEED</span>
+        <span class="value" id="speed">1</span>
+      </div>
+    </div>
+
+    <div class="screen">
+      <canvas id="board" width="528" height="528"></canvas>
+      <div class="scanlines"></div>
+      <div class="vignette"></div>
+
+      <div id="overlay" class="overlay">
+        <p id="overlay-title" class="overlay-title">SNAKE</p>
+        <p id="overlay-msg" class="overlay-msg">Come, crece, no te muerdas.</p>
+        <p id="overlay-score" class="overlay-score"></p>
+        <button id="start-btn" type="button">JUGAR</button>
+        <ul class="controls">
+          <li><kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover</li>
+          <li><kbd>P</kbd> / <kbd>Espacio</kbd> pausa</li>
+          <li><kbd>Enter</kbd> reiniciar</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

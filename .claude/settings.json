@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/format-file.mjs",
+            "timeout": 30,
+            "statusMessage": "Prettier"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/lint-queue.mjs",
+            "timeout": 180,
+            "statusMessage": "ESLint --fix"
+          }
+        ]
+      }
+    ]
+  }
+}
