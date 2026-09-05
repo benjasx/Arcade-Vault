@@ -18,8 +18,9 @@
   --line: rgba(0, 245, 255, 0.18);
   --line-2: rgba(255, 255, 255, 0.06);
   --pixel: var(--font-press-start-2p), "Press Start 2P", system-ui, monospace;
-  --mono: var(--font-jetbrains-mono), "JetBrains Mono", var(--font-courier-prime),
-    "Courier Prime", "Courier New", monospace;
+  --mono:
+    var(--font-jetbrains-mono), "JetBrains Mono", var(--font-courier-prime), "Courier Prime",
+    "Courier New", monospace;
 }
 
 /* Expose theme tokens to Tailwind utilities (v4, no config file) */
@@ -93,8 +94,7 @@ a {
   pointer-events: none;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(255, 0, 110, 0.08), transparent 60%),
-    radial-gradient(120% 80% at 50% 100%, rgba(0, 245, 255, 0.1), transparent 60%),
-    var(--bg);
+    radial-gradient(120% 80% at 50% 100%, rgba(0, 245, 255, 0.1), transparent 60%), var(--bg);
 }
 .av-bg::before {
   /* perspective floor grid */
@@ -105,10 +105,8 @@ a {
   bottom: -10%;
   height: 70%;
   background:
-    linear-gradient(to right, rgba(0, 245, 255, 0.22) 1px, transparent 1px) 0 0 /
-      60px 60px,
-    linear-gradient(to bottom, rgba(0, 245, 255, 0.22) 1px, transparent 1px) 0 0 /
-      60px 60px;
+    linear-gradient(to right, rgba(0, 245, 255, 0.22) 1px, transparent 1px) 0 0 / 60px 60px,
+    linear-gradient(to bottom, rgba(0, 245, 255, 0.22) 1px, transparent 1px) 0 0 / 60px 60px;
   transform: perspective(600px) rotateX(60deg);
   transform-origin: center bottom;
   mask-image: linear-gradient(to top, black 0%, transparent 90%);
@@ -215,11 +213,7 @@ a {
   align-items: center;
   gap: 24px;
   padding: 14px 32px;
-  background: linear-gradient(
-    180deg,
-    rgba(10, 10, 15, 0.92),
-    rgba(10, 10, 15, 0.78)
-  );
+  background: linear-gradient(180deg, rgba(10, 10, 15, 0.92), rgba(10, 10, 15, 0.78));
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
 }
@@ -295,12 +289,7 @@ a {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle at 35% 35%,
-    #fff8b0,
-    #f5ff00 60%,
-    #b0b800
-  );
+  background: radial-gradient(circle at 35% 35%, #fff8b0, #f5ff00 60%, #b0b800);
   box-shadow: 0 0 8px var(--yellow);
 }
 .av-nav .auth-btn {
@@ -388,14 +377,7 @@ a {
     transform 80ms ease,
     box-shadow 160ms ease,
     color 160ms;
-  clip-path: polygon(
-    8px 0,
-    100% 0,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0 100%,
-    0 8px
-  );
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
 }
 .btn::before {
   content: "";
@@ -480,12 +462,7 @@ a {
   font-size: clamp(28px, 6vw, 64px);
   letter-spacing: 0.06em;
   margin: 0;
-  background: linear-gradient(
-    180deg,
-    #fff 0%,
-    var(--cyan) 60%,
-    var(--magenta) 110%
-  );
+  background: linear-gradient(180deg, #fff 0%, var(--cyan) 60%, var(--magenta) 110%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -701,11 +678,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0 32px,
-    rgba(0, 0, 0, 0.4) 32px 33px
-  );
+  background: repeating-linear-gradient(0deg, transparent 0 32px, rgba(0, 0, 0, 0.4) 32px 33px);
 }
 
 .cover-tetro {
@@ -736,12 +709,11 @@ a {
   inset: 0;
   background-image:
     radial-gradient(circle at 70% 50%, var(--magenta) 0 6px, transparent 7px),
-    linear-gradient(90deg, var(--green) 0 40px, transparent 40px) 20% 50% / 200px
-      12px no-repeat,
-    linear-gradient(90deg, var(--green) 0 12px, transparent 12px)
-      calc(20% + 40px) calc(50% - 12px) / 12px 12px no-repeat,
-    linear-gradient(90deg, var(--green) 0 12px, transparent 12px)
-      calc(20% + 28px) calc(50% - 12px) / 12px 12px no-repeat;
+    linear-gradient(90deg, var(--green) 0 40px, transparent 40px) 20% 50% / 200px 12px no-repeat,
+    linear-gradient(90deg, var(--green) 0 12px, transparent 12px) calc(20% + 40px)
+      calc(50% - 12px) / 12px 12px no-repeat,
+    linear-gradient(90deg, var(--green) 0 12px, transparent 12px) calc(20% + 28px)
+      calc(50% - 12px) / 12px 12px no-repeat;
   filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.6));
 }
 
@@ -757,16 +729,7 @@ a {
     radial-gradient(circle at 30% 50%, transparent 0 0, transparent 28px),
     radial-gradient(circle at 70% 50%, var(--magenta) 0 6px, transparent 7px),
     radial-gradient(circle at 82% 50%, var(--cyan) 0 6px, transparent 7px);
-  clip-path: polygon(
-    0 0,
-    30% 0,
-    30% 50%,
-    100% 30%,
-    100% 70%,
-    30% 50%,
-    30% 100%,
-    0 100%
-  );
+  clip-path: polygon(0 0, 30% 0, 30% 50%, 100% 30%, 100% 70%, 30% 50%, 30% 100%, 0 100%);
   filter: drop-shadow(0 0 8px rgba(245, 255, 0, 0.5));
 }
 .cover-glot::before {
@@ -833,11 +796,7 @@ a {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(
-      0deg,
-      rgba(0, 245, 255, 0.18) 0 20px,
-      transparent 20px 40px
-    ),
+    repeating-linear-gradient(0deg, rgba(0, 245, 255, 0.18) 0 20px, transparent 20px 40px),
     radial-gradient(circle at 50% 55%, var(--green) 0 14px, transparent 15px);
   filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.5));
 }
@@ -850,8 +809,8 @@ a {
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(0deg, var(--ink) 0 10px, transparent 10px 20px) 50%
-      0 / 2px 100% no-repeat,
+    repeating-linear-gradient(0deg, var(--ink) 0 10px, transparent 10px 20px) 50% 0 / 2px 100%
+      no-repeat,
     linear-gradient(var(--cyan), var(--cyan)) 6% 35% / 6px 30% no-repeat,
     linear-gradient(var(--magenta), var(--magenta)) 88% 35% / 6px 30% no-repeat,
     radial-gradient(circle at 60% 60%, var(--yellow) 0 5px, transparent 6px);
@@ -1058,11 +1017,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    120% 80% at 50% 30%,
-    rgba(0, 245, 255, 0.05),
-    transparent 60%
-  );
+  background: radial-gradient(120% 80% at 50% 30%, rgba(0, 245, 255, 0.05), transparent 60%);
   pointer-events: none;
 }
 .crt-screen {
@@ -1079,11 +1034,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.18) 0 2px,
-    transparent 2px 4px
-  );
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 4px);
   pointer-events: none;
   mix-blend-mode: multiply;
 }
@@ -1091,11 +1042,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    120% 90% at 50% 50%,
-    transparent 60%,
-    rgba(0, 0, 0, 0.65)
-  );
+  background: radial-gradient(120% 90% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.65));
   pointer-events: none;
 }
 .crt-content {
@@ -1134,6 +1081,17 @@ a {
   box-shadow: 0 0 6px var(--green);
 }
 
+/* canvas del juego real de asteroides: llena la pantalla CRT (4:3) sin
+   deformar; `contain` deja letterbox si la proporción no encaja exacto. */
+.asteroids-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* fake in-screen game */
 .game-arena {
   position: absolute;
@@ -1141,18 +1099,14 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%),
-    #000;
+  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
 }
 .game-arena .grid-floor {
   position: absolute;
   inset: 50% 0 0 0;
   background:
-    linear-gradient(to right, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0 0 /
-      40px 40px,
-    linear-gradient(to bottom, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0 0 /
-      40px 40px;
+    linear-gradient(to right, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(to bottom, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0 0 / 40px 40px;
   transform: perspective(300px) rotateX(70deg);
   transform-origin: top;
   animation: gridscroll 4s linear infinite;
@@ -2035,11 +1989,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    80% 60% at 50% 50%,
-    rgba(245, 255, 0, 0.06),
-    transparent 70%
-  );
+  background: radial-gradient(80% 60% at 50% 50%, rgba(245, 255, 0, 0.06), transparent 70%);
   pointer-events: none;
 }
 .stats-inner {
