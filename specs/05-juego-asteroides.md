@@ -185,7 +185,7 @@ Convenciones (heredadas de SPEC 01):
 
 ## Qué **no** entra en esta spec
 
-- Motor real para los otros 7 juegos de `GAMES`.
+- Motor real para los otros 7 juegos de `GAMES`..
 - Nuevo id de juego, ficha, portada o textos para asteroides (se reusa `rocas`).
 - Leaderboards con `av_scores` reales en `/juego/[id]` o `/salon`.
 - Puntuaciones en Supabase.
