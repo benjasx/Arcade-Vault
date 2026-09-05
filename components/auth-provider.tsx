@@ -1,26 +1,18 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export interface AuthUser {
-  name: string; // iniciales en mayúsculas, <= 10 chars
+  id: string;
+  name: string; // "Nombre de arcade" del perfil, <= 10 chars en mayúsculas
 }
 
 export interface AuthContextValue {
   user: AuthUser | null;
-  ready: boolean; // true tras leer localStorage en cliente (evita mismatch de hidratación)
-  signIn: (name: string) => void; // guarda av_user
-  signOut: () => void; // borra av_user
+  ready: boolean; // true tras resolver la sesión en cliente (evita mismatch de hidratación)
+  signOut: () => Promise<void>;
 }
-
-const STORAGE_KEY = "av_user";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -28,44 +20,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
 
-  // Hidratación client-only: leemos localStorage tras montar y marcamos `ready`
-  // para que los consumidores no pinten UI de usuario durante el SSR/primer render.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? (JSON.parse(raw) as AuthUser | null) : null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync one-shot desde localStorage
-      if (parsed && typeof parsed.name === "string") setUser(parsed);
-    } catch {
-      // localStorage no disponible (modo privado) o JSON corrupto: seguimos sin usuario
-    }
-    setReady(true);
+    const supabase = createClient();
+    let active = true;
+
+    // onAuthStateChange emite INITIAL_SESSION al suscribirse y luego cada
+    // login/logout/refresh. El callback es síncrono a propósito (las llamadas
+    // async van por .then) para no bloquear el cliente de Supabase.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const uid = session?.user?.id;
+      if (!uid) {
+        if (active) {
+          setUser(null);
+          setReady(true);
+        }
+        return;
+      }
+      supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", uid)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!active) return;
+          setUser({ id: uid, name: data?.name ?? "PLAYER" });
+          setReady(true);
+        });
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  const signIn = useCallback((name: string) => {
-    const next: AuthUser = { name: (name || "PLAYER1").toUpperCase().slice(0, 10) };
-    setUser(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // sin persistencia: la sesión vive solo en memoria
-    }
-  }, []);
-
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     setUser(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // nada que limpiar
-    }
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, ready, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, ready, signOut }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

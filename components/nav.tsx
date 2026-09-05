@@ -48,7 +48,7 @@ export function Nav() {
           <span>CRÉDITOS · 03</span>
         </div>
         {showUser ? (
-          <button className="btn ghost auth-btn" onClick={signOut}>
+          <button className="btn ghost auth-btn" onClick={() => void signOut()}>
             {user.name} ▾
           </button>
         ) : (
@@ -56,19 +56,12 @@ export function Nav() {
             Iniciar Sesión
           </Link>
         )}
-        <button
-          className="btn ghost hamburger"
-          onClick={() => setOpen(true)}
-          aria-label="Menú"
-        >
+        <button className="btn ghost hamburger" onClick={() => setOpen(true)} aria-label="Menú">
           ≡
         </button>
       </nav>
 
-      <div
-        className={"av-mobile-backdrop" + (open ? " open" : "")}
-        onClick={close}
-      />
+      <div className={"av-mobile-backdrop" + (open ? " open" : "")} onClick={close} />
       <aside className={"av-mobile-panel" + (open ? " open" : "")}>
         <div className="pixel neon-cyan" style={{ fontSize: 11, marginBottom: 16 }}>
           MENÚ
@@ -76,32 +69,16 @@ export function Nav() {
         <Link href="/" className={inicioActive ? "active" : ""} onClick={close}>
           Inicio
         </Link>
-        <Link
-          href="/juegos"
-          className={libActive ? "active" : ""}
-          onClick={close}
-        >
+        <Link href="/juegos" className={libActive ? "active" : ""} onClick={close}>
           Biblioteca
         </Link>
-        <Link
-          href="/salon"
-          className={salonActive ? "active" : ""}
-          onClick={close}
-        >
+        <Link href="/salon" className={salonActive ? "active" : ""} onClick={close}>
           Salón de la Fama
         </Link>
-        <Link
-          href="/acerca-de"
-          className={acercaActive ? "active" : ""}
-          onClick={close}
-        >
+        <Link href="/acerca-de" className={acercaActive ? "active" : ""} onClick={close}>
           Acerca de
         </Link>
-        <Link
-          href="/login"
-          className={loginActive ? "active" : ""}
-          onClick={close}
-        >
+        <Link href="/login" className={loginActive ? "active" : ""} onClick={close}>
           {showUser ? "Cuenta" : "Iniciar Sesión"}
         </Link>
         <div style={{ flex: 1 }} />
