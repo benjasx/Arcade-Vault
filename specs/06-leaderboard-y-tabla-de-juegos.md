@@ -271,3 +271,30 @@ Convenciones (heredadas de SPEC 01/04):
 - Tests automatizados.
 
 Cada uno, si llega, va en su propia spec.
+
+---
+
+## Pasos manuales del usuario (dashboard de Supabase `mrimkuambtxtoycyfxyh`)
+
+El asistente no puede tocar el dashboard remoto. Estos pasos quedan pendientes y
+son los únicos que bloquean los dos criterios de OAuth:
+
+1. **Auth → Providers → Google**: crear una OAuth app en Google Cloud Console
+   (pantalla de consentimiento + credenciales OAuth 2.0, tipo "Web application"),
+   pegar el **Client ID** y **Client Secret** en el provider Google del dashboard
+   y activarlo.
+2. **Auth → Providers → GitHub**: crear una OAuth App en GitHub
+   (Settings → Developer settings → OAuth Apps), pegar **Client ID** y
+   **Client Secret** en el provider GitHub del dashboard y activarlo.
+3. **URLs de redirección**:
+   - En **cada proveedor** (Google Cloud / GitHub), añadir como _Authorized redirect URI_:
+     `https://mrimkuambtxtoycyfxyh.supabase.co/auth/v1/callback`.
+   - En **Supabase → Auth → URL Configuration → Redirect URLs**, añadir a la
+     allowlist las URLs de la app: `http://localhost:3000/auth/callback` y
+     `https://<dominio-de-producción>/auth/callback`. Ajustar también `Site URL`.
+4. **Auth → Providers → Email**: confirmar que **"Confirm email" está desactivado**
+   (paridad con `enable_confirmations = false` de `supabase/config.toml`), para que
+   el registro con email/contraseña deje sesión activa sin paso de confirmación.
+
+Los `client_id`/`secret` de `supabase/config.toml` usan `env(...)` solo para el
+stack local (`supabase start`); la config remota vive en el dashboard.
