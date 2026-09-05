@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { saveScore } from "@/lib/scores";
-import type { Game } from "@/lib/data";
+import type { Game } from "@/lib/games";
 
 export function GamePlayer({ game }: { game: Game }) {
   const router = useRouter();
@@ -23,10 +23,7 @@ export function GamePlayer({ game }: { game: Game }) {
 
   useEffect(() => {
     if (over || paused) return;
-    const t = setInterval(
-      () => setScore((s) => s + Math.floor(10 + Math.random() * 90)),
-      220,
-    );
+    const t = setInterval(() => setScore((s) => s + Math.floor(10 + Math.random() * 90)), 220);
     return () => clearInterval(t);
   }, [over, paused]);
 
@@ -68,10 +65,7 @@ export function GamePlayer({ game }: { game: Game }) {
           <button className="btn magenta" onClick={endGame}>
             FIN
           </button>
-          <button
-            className="btn ghost"
-            onClick={() => router.push(`/juego/${game.id}`)}
-          >
+          <button className="btn ghost" onClick={() => router.push(`/juego/${game.id}`)}>
             SALIR
           </button>
         </div>
@@ -87,10 +81,7 @@ export function GamePlayer({ game }: { game: Game }) {
             <div className="player-ship" />
           </div>
           {paused && (
-            <div
-              className="crt-content"
-              style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}
-            >
+            <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
               <div>
                 <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
                   EN PAUSA
@@ -127,9 +118,7 @@ export function GamePlayer({ game }: { game: Game }) {
               <div className="input-row">
                 <input
                   value={name}
-                  onChange={(e) =>
-                    setName(e.target.value.toUpperCase().slice(0, 10))
-                  }
+                  onChange={(e) => setName(e.target.value.toUpperCase().slice(0, 10))}
                   placeholder="TUS INICIALES"
                 />
                 <button
@@ -149,10 +138,7 @@ export function GamePlayer({ game }: { game: Game }) {
               <button className="btn" onClick={restart}>
                 JUGAR DE NUEVO
               </button>
-              <button
-                className="btn magenta"
-                onClick={() => router.push("/juegos")}
-              >
+              <button className="btn magenta" onClick={() => router.push("/juegos")}>
                 VOLVER AL VAULT
               </button>
             </div>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { createAsteroidsGame, type AsteroidsHandle } from "@/lib/games/asteroids";
 import { saveScore } from "@/lib/scores";
-import type { Game } from "@/lib/data";
+import type { Game } from "@/lib/games";
 
 /**
  * Reproductor del juego real de asteroides (solo para la entrada `rocas`).
