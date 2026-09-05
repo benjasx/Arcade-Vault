@@ -1,6 +1,6 @@
 # SPEC 05 — Primer juego real: Asteroides en la entrada "rocas"
 
-> **Status:** Aprobado
+> **Status:** Implementado
 > **Depends on:** SPEC 01
 > **Date:** 2026-09-05
 > **Objective:** Portar el juego canvas de `references/started-games/02-asteroides/game.js` a un controlador imperativo TypeScript montado en un componente cliente que sustituye la partida simulada solo para la entrada `rocas`, conservando su HUD en canvas y guardando la puntuación final por el modal de fin de la plataforma.
@@ -128,22 +128,22 @@ Convenciones (heredadas de SPEC 01):
 
 ## Acceptance criteria
 
-- [ ] `references/started-games/02-asteroides/game.js` y los otros 4 archivos existen como archivos planos en la rama; `git status` ya no lo trata como gitlink de submódulo.
-- [ ] `/juego/rocas/jugar` renderiza un `<canvas>` con el juego real (nave triangular, asteroides irregulares), no la arena simulada de `div`.
-- [ ] Flecha izquierda/derecha rota la nave, flecha arriba propulsa, `Space` dispara; balas, nave y asteroides hacen wrap por los bordes.
-- [ ] Disparar a un asteroide grande lo parte en dos medianos; mediano en dos pequeños; pequeño desaparece; el score sube 20 / 50 / 100 según tamaño.
-- [ ] El HUD (`SCORE`, `NIVEL`, iconos de vida) se dibuja dentro del canvas; al quedar 0 asteroides sube de nivel y aparecen `3 + nivel` asteroides grandes.
-- [ ] Cada 5 asteroides destruidos aparece un power-up (P/B/S/M, máximo 2 en pantalla); recogerlo aplica su efecto con cuenta atrás en el HUD.
-- [ ] Chocar con un asteroide sin invencibilidad ni escudo resta una vida; con 0 vidas el juego pasa a game over.
-- [ ] Al llegar a game over se abre el modal "FIN DEL JUEGO" de la plataforma con la puntuación final; pulsar `Space` no reinicia el canvas.
-- [ ] En el modal, `GUARDAR PUNTUACIÓN` añade una entrada `{ game: "rocas", score, name, at }` a `localStorage.av_scores` y muestra el toast `▸ PUNTUACIÓN GUARDADA_`.
-- [ ] `JUGAR DE NUEVO` reinicia la partida (score 0, 3 vidas, nivel 1) y cierra el modal; `VOLVER AL VAULT` navega a `/juegos`.
-- [ ] `PAUSA` detiene el bucle del juego y cambia a `REANUDAR`; al reanudar no hay salto de `dt` (la nave y los asteroides no "teletransportan").
-- [ ] `SALIR` navega a `/juego/rocas`; tras salir no quedan listeners `keydown`/`keyup` ni `requestAnimationFrame` en marcha.
-- [ ] `/juego/caida/jugar` y el resto de juegos siguen usando `GamePlayer` simulado, sin cambios de comportamiento.
-- [ ] El nombre inicial del input del modal es el del usuario con sesión, o `INVITADO` sin sesión.
-- [ ] El `<canvas>` escala a la pantalla CRT manteniendo proporción 4:3, sin deformación ni scroll horizontal en los breakpoints existentes.
-- [ ] `npm run build` y `npm run lint` terminan sin errores ni warnings nuevos; sin warnings de hidratación de React en consola.
+- [x] `references/started-games/02-asteroides/game.js` y los otros 4 archivos existen como archivos planos en la rama; `git status` ya no lo trata como gitlink de submódulo.
+- [x] `/juego/rocas/jugar` renderiza un `<canvas>` con el juego real (nave triangular, asteroides irregulares), no la arena simulada de `div`.
+- [x] Flecha izquierda/derecha rota la nave, flecha arriba propulsa, `Space` dispara; balas, nave y asteroides hacen wrap por los bordes.
+- [x] Disparar a un asteroide grande lo parte en dos medianos; mediano en dos pequeños; pequeño desaparece; el score sube 20 / 50 / 100 según tamaño. _(port literal de `game.js`: `POINTS=[0,100,50,20]`, `Asteroid.split()`)_
+- [x] El HUD (`SCORE`, `NIVEL`, iconos de vida) se dibuja dentro del canvas; al quedar 0 asteroides sube de nivel y aparecen `3 + nivel` asteroides grandes. _(`nextLevel()` port literal)_
+- [x] Cada 5 asteroides destruidos aparece un power-up (P/B/S/M, máximo 2 en pantalla); recogerlo aplica su efecto con cuenta atrás en el HUD. _(constantes y `spawnPowerUp`/`applyPowerUp`/`drawHUD` port literal)_
+- [x] Chocar con un asteroide sin invencibilidad ni escudo resta una vida; con 0 vidas el juego pasa a game over.
+- [x] Al llegar a game over se abre el modal "FIN DEL JUEGO" de la plataforma con la puntuación final; pulsar `Space` no reinicia el canvas.
+- [x] En el modal, `GUARDAR PUNTUACIÓN` añade una entrada `{ game: "rocas", score, name, at }` a `localStorage.av_scores` y muestra el toast `▸ PUNTUACIÓN GUARDADA_`.
+- [x] `JUGAR DE NUEVO` reinicia la partida (score 0, 3 vidas, nivel 1) y cierra el modal; `VOLVER AL VAULT` navega a `/juegos`.
+- [x] `PAUSA` detiene el bucle del juego y cambia a `REANUDAR`; al reanudar no hay salto de `dt` (la nave y los asteroides no "teletransportan").
+- [x] `SALIR` navega a `/juego/rocas`; tras salir no quedan listeners `keydown`/`keyup` ni `requestAnimationFrame` en marcha.
+- [x] `/juego/caida/jugar` y el resto de juegos siguen usando `GamePlayer` simulado, sin cambios de comportamiento.
+- [x] El nombre inicial del input del modal es el del usuario con sesión, o `INVITADO` sin sesión.
+- [x] El `<canvas>` escala a la pantalla CRT manteniendo proporción 4:3, sin deformación ni scroll horizontal en los breakpoints existentes.
+- [x] `npm run build` y `npm run lint` terminan sin errores ni warnings nuevos; sin warnings de hidratación de React en consola.
 
 ---
 
