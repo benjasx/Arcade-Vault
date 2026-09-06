@@ -36,6 +36,32 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const rand = (min, max) => min + Math.random() * (max - min);
 const randInt = (min, max) => Math.floor(rand(min, max + 1));
 
+// ── Audio (samples Kenney "Sci-Fi Sounds", CC0) ──────────────────────────────
+const SND_DIR = "sonidos/kenney_sci-fi-sounds/Audio/";
+
+// Cada sonido tiene un pool de elementos <audio> para poder solaparse
+function makeSound(file, volume, poolSize = 4) {
+  const pool = [];
+  for (let i = 0; i < poolSize; i++) {
+    const a = new Audio(SND_DIR + file);
+    a.volume = volume;
+    a.preload = "auto";
+    pool.push(a);
+  }
+  let idx = 0;
+  return () => {
+    const a = pool[idx++ % pool.length];
+    try {
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    } catch (e) {}
+  };
+}
+
+const playShoot = makeSound("laserRetro_000.ogg", 0.3, 6); // disparo
+const playAsteroidBoom = makeSound("explosionCrunch_000.ogg", 0.45, 5); // asteroide
+const playShipBoom = makeSound("lowFrequency_explosion_000.ogg", 0.6, 2); // nave
+
 // ── Bullet ────────────────────────────────────────────────────────────────────
 class Bullet {
   constructor(x, y, angle) {
@@ -378,6 +404,7 @@ function explode(x, y, count = 8) {
 
 function killShip() {
   explode(ship.x, ship.y, 14);
+  playShipBoom();
   ship.dead = true;
   lives--;
   if (lives <= 0) {
@@ -411,7 +438,9 @@ function update(dt) {
 
   // Disparar
   if (pressed("Space")) {
-    bullets.push(...ship.tryShoot());
+    const shots = ship.tryShoot();
+    if (shots.length) playShoot();
+    bullets.push(...shots);
   }
 
   ship.update(dt);
@@ -437,6 +466,7 @@ function update(dt) {
         a.dead = true;
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
+        playAsteroidBoom();
         newAsteroids.push(...a.split());
         asteroidsDestroyed++;
         if (

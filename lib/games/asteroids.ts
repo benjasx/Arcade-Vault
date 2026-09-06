@@ -88,6 +88,46 @@ export function createAsteroidsGame(
   }
   const ctx: CanvasRenderingContext2D = maybeCtx;
 
+  // ── Audio ──────────────────────────────────────────────────────────────────
+  // Samples de Kenney "Sci-Fi Sounds" (CC0), servidos desde `public/sounds/`.
+  // Cada efecto usa un pool de elementos <audio> para poder solaparse sin cortes.
+  const makeSound = (src: string, volume: number, poolSize = 4) => {
+    const pool = Array.from({ length: poolSize }, () => {
+      const a = new Audio(src);
+      a.volume = volume;
+      a.preload = "auto";
+      return a;
+    });
+    let i = 0;
+    return () => {
+      const a = pool[i++ % pool.length];
+      try {
+        a.currentTime = 0;
+        void a.play().catch(() => {});
+      } catch {
+        /* ignora fallos de reproducción (autoplay, etc.) */
+      }
+    };
+  };
+
+  const playShoot = makeSound("/sounds/laserRetro_000.ogg", 0.3, 6); // disparo
+  const playAsteroidBoom = makeSound("/sounds/explosionCrunch_000.ogg", 0.45, 5); // asteroide
+  const playShipBoom = makeSound("/sounds/lowFrequency_explosion_000.ogg", 0.6, 2); // nave
+  const playPowerUp = makeSound("/sounds/forceField_000.ogg", 0.4, 3); // power-up
+
+  // Propulsión: sonido en bucle mientras se acelera.
+  const thrustSound = new Audio("/sounds/thrusterFire_000.ogg");
+  thrustSound.loop = true;
+  thrustSound.volume = 0.3;
+  const setThrustSound = (on: boolean) => {
+    if (on) {
+      if (thrustSound.paused) void thrustSound.play().catch(() => {});
+    } else if (!thrustSound.paused) {
+      thrustSound.pause();
+      thrustSound.currentTime = 0;
+    }
+  };
+
   // ── Input ──────────────────────────────────────────────────────────────────
   const keys: Record<string, boolean> = {};
   const justPressed: Record<string, boolean> = {};
@@ -477,6 +517,7 @@ export function createAsteroidsGame(
 
   function killShip() {
     explode(ship.x, ship.y, 14);
+    playShipBoom();
     ship.dead = true;
     lives--;
     if (lives <= 0) {
@@ -496,12 +537,14 @@ export function createAsteroidsGame(
   function update(dt: number) {
     if (state === "gameover") {
       // Sin reinicio por `Space`: el modal de la plataforma es quien reinicia.
+      setThrustSound(false);
       particles.forEach((p) => p.update(dt));
       particles = particles.filter((p) => !p.dead);
       return;
     }
 
     if (state === "dead") {
+      setThrustSound(false);
       deadTimer -= dt;
       particles.forEach((p) => p.update(dt));
       particles = particles.filter((p) => !p.dead);
@@ -515,10 +558,13 @@ export function createAsteroidsGame(
 
     // Disparar
     if (pressed("Space")) {
-      bullets.push(...ship.tryShoot());
+      const shots = ship.tryShoot();
+      if (shots.length) playShoot();
+      bullets.push(...shots);
     }
 
     ship.update(dt);
+    setThrustSound(ship.thrusting);
     bullets.forEach((b) => b.update(dt));
     asteroids.forEach((a) => a.update(slowMoTimer > 0 ? dt * SLOWMO_FACTOR : dt));
     particles.forEach((p) => p.update(dt));
@@ -540,6 +586,7 @@ export function createAsteroidsGame(
           a.dead = true;
           score += POINTS[a.size];
           explode(a.x, a.y, a.size * 5);
+          playAsteroidBoom();
           newAsteroids.push(...a.split());
           asteroidsDestroyed++;
           if (
@@ -560,6 +607,7 @@ export function createAsteroidsGame(
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
         p.dead = true;
         applyPowerUp(p.type);
+        playPowerUp();
       }
     }
     powerups = powerups.filter((p) => !p.dead);
@@ -667,6 +715,7 @@ export function createAsteroidsGame(
     if (rafId === null) return;
     cancelAnimationFrame(rafId);
     rafId = null;
+    setThrustSound(false); // no dejar el bucle de propulsión sonando en pausa/salida
   };
 
   initGame();
