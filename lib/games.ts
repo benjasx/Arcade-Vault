@@ -19,6 +19,14 @@ export type Game = {
   plays: number;
 };
 
+// IDs de juegos con motor real integrado en la app. El resto del catálogo sigue
+// en la BD pero no se muestra en la biblioteca hasta tener su motor.
+export const PLAYABLE_GAME_IDS = new Set<string>(["rocas"]);
+
+export function isPlayable(id: string): boolean {
+  return PLAYABLE_GAME_IDS.has(id);
+}
+
 export function toGame(row: GamesWithStatsRow): Game {
   return {
     id: row.id ?? "",
