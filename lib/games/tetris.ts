@@ -221,6 +221,38 @@ function rotateCW(shape: number[][]): number[][] {
   return result;
 }
 
+// ── Render ──────────────────────────────────────────────────────────────────
+const BOARD_BG = "#0b0e13";
+const GRID_COLOR = "rgba(255, 255, 255, 0.06)";
+const BLOCK_HIGHLIGHT = "rgba(255, 255, 255, 0.3)"; // bisel superior + símbolo (antes CSS `--block-highlight`)
+
+/** Renderizador único de bloque (game.js tenía 4 skins; aquí solo el estilo "retro"). */
+function drawBlock(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  colorIndex: number,
+  size: number,
+  alpha: number,
+  options?: { color?: string; symbol?: string },
+) {
+  if (!colorIndex) return;
+  const color = options?.color || COLORS[colorIndex] || "#888";
+  context.globalAlpha = alpha;
+  context.fillStyle = color;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.fillStyle = BLOCK_HIGHLIGHT;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (options?.symbol) {
+    context.fillStyle = BLOCK_HIGHLIGHT;
+    context.font = `${Math.floor(size * 0.6)}px sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(options.symbol, x * size + size / 2, y * size + size / 2 + 1);
+  }
+  context.globalAlpha = 1;
+}
+
 export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions): TetrisHandle {
   if (typeof opts.onGameOver !== "function") {
     throw new TypeError("createTetrisGame: opts.onGameOver debe ser una función");
@@ -300,13 +332,6 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   function playPerfectClearSound() {
     [523, 659, 784, 1046].forEach((f, i) => playTone(f, 0.18, "triangle", i * 0.09, 0.18));
   }
-
-  // ── Input ──────────────────────────────────────────────────────────────────
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (PREVENT_DEFAULT_KEYS.includes(e.code)) e.preventDefault();
-    // El manejo real de teclas se añade en los pasos 5–6.
-  };
-  window.addEventListener("keydown", onKeyDown);
 
   // ── Estado de la partida (antes `let` a nivel de módulo en game.js) ─────────
   let board: Board = createBoard();
@@ -671,27 +696,181 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────────
+  function drawGrid() {
+    ctx.strokeStyle = GRID_COLOR;
+    ctx.lineWidth = 0.5;
+    for (let c = 1; c < COLS; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * BLOCK, 0);
+      ctx.lineTo(c * BLOCK, ROWS * BLOCK);
+      ctx.stroke();
+    }
+    for (let r = 1; r < ROWS; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * BLOCK);
+      ctx.lineTo(COLS * BLOCK, r * BLOCK);
+      ctx.stroke();
+    }
+  }
+
+  // Franja superior con los mensajes de combo / T-spin; fondo semitransparente y
+  // fade de ~900 ms (sustituye al `#combo-popup` del DOM del original).
+  const POPUP_MS = 900;
+  function drawPopupStrip() {
+    if (!popupLines.length) return;
+    const elapsed = performance.now() - popupShownAt;
+    if (elapsed >= POPUP_MS) {
+      popupLines = [];
+      return;
+    }
+    const t = elapsed / POPUP_MS;
+    const alpha = t < 0.6 ? 1 : Math.max(0, 1 - (t - 0.6) / 0.4);
+    const lineH = 20;
+    const bandH = 14 + (popupLines.length + 1) * lineH;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(0, 0, BOARD_W, bandH);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 12px monospace";
+    ctx.fillStyle = "#4dd0e1";
+    popupLines.forEach((m, i) => ctx.fillText(m, BOARD_W / 2, 14 + lineH / 2 + i * lineH));
+    ctx.fillStyle = "#ffd54f";
+    ctx.fillText(
+      `+${popupGained.toLocaleString("es-ES")}`,
+      BOARD_W / 2,
+      14 + lineH / 2 + popupLines.length * lineH,
+    );
+    ctx.restore();
+  }
+
   function draw() {
-    ctx.fillStyle = "#0b0e13";
+    ctx.fillStyle = BOARD_BG;
     ctx.fillRect(0, 0, BOARD_W, BOARD_H);
-    nextCtx.clearRect(0, 0, NEXT_W, NEXT_H);
+    drawGrid();
+
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        drawBlock(ctx, c, r, board[r][c], BLOCK, 1, wildcard[r][c] ? { symbol: "★" } : undefined);
+
+    drawPopupStrip();
+
+    if (gameOver) return;
+
+    const powerupOptions = current.powerup
+      ? {
+          color: POWERUP_INFO[current.powerup].color,
+          symbol: POWERUP_INFO[current.powerup].symbol,
+        }
+      : undefined;
+
+    const gy = ghostY();
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        if (current.shape[r][c])
+          drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2, powerupOptions);
+
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        if (current.shape[r][c])
+          drawBlock(
+            ctx,
+            current.x + c,
+            current.y + r,
+            current.shape[r][c],
+            BLOCK,
+            1,
+            powerupOptions,
+          );
   }
 
   function drawNext() {
-    // Preview de la siguiente pieza sobre `opts.nextCanvas`; implementación en el paso 6.
+    const NB = 30;
+    nextCtx.fillStyle = BOARD_BG;
+    nextCtx.fillRect(0, 0, NEXT_W, NEXT_H);
+    const shape = next.shape;
+    const offX = Math.floor((4 - shape[0].length) / 2);
+    const offY = Math.floor((4 - shape.length) / 2);
+    const powerupOptions = next.powerup
+      ? { color: POWERUP_INFO[next.powerup].color, symbol: POWERUP_INFO[next.powerup].symbol }
+      : undefined;
+    for (let r = 0; r < shape.length; r++)
+      for (let c = 0; c < shape[r].length; c++)
+        drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, 1, powerupOptions);
   }
+
+  // ── Input ──────────────────────────────────────────────────────────────────
+  // Sin pausa interna con `P` / `Esc`: solo el botón PAUSA de la plataforma.
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (PREVENT_DEFAULT_KEYS.includes(e.code)) e.preventDefault();
+    if (paused || gameOver) return;
+    switch (e.code) {
+      case "ArrowLeft":
+        if (!collide(current.shape, current.x - 1, current.y)) {
+          current.x--;
+          lastActionWasRotate = false;
+        }
+        break;
+      case "ArrowRight":
+        if (!collide(current.shape, current.x + 1, current.y)) {
+          current.x++;
+          lastActionWasRotate = false;
+        }
+        break;
+      case "ArrowDown":
+        softDrop();
+        break;
+      case "ArrowUp":
+      case "KeyX":
+        tryRotate();
+        break;
+      case "Space":
+        hardDrop();
+        break;
+    }
+    emitStats();
+  };
+  window.addEventListener("keydown", onKeyDown);
 
   // ── Loop ───────────────────────────────────────────────────────────────────
   let rafId: number | null = null;
+  let lastTime: number | null = null;
 
-  const loop = () => {
-    // La física (gravedad, freeze) con `dt` capado a 50 ms se añade en los pasos 5–6.
+  const loop = (ts: number) => {
+    // `dt` capado a 50 ms (el original no lo capaba).
+    const dt = lastTime === null ? 0 : Math.min(ts - lastTime, 50);
+    lastTime = ts;
+
+    if (freezeRemaining > 0) {
+      const before = freezeRemaining;
+      freezeRemaining = Math.max(0, freezeRemaining - dt);
+      // re-emite el HUD solo al cambiar las décimas mostradas (o al terminar)
+      if (Math.ceil(before / 100) !== Math.ceil(freezeRemaining / 100)) emitStats();
+    } else {
+      dropAccum += dt;
+      if (dropAccum >= dropInterval) {
+        dropAccum = 0;
+        if (!collide(current.shape, current.x, current.y + 1)) {
+          current.y++;
+          lastActionWasRotate = false;
+        } else {
+          lockPiece();
+        }
+      }
+    }
+
     draw();
+    if (gameOver) {
+      rafId = null;
+      return;
+    }
     rafId = requestAnimationFrame(loop);
   };
 
   const startLoop = () => {
     if (rafId !== null) return;
+    lastTime = null; // evita un salto de `dt` (y del contador de freeze) al reanudar
     rafId = requestAnimationFrame(loop);
   };
 
@@ -706,10 +885,17 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   startLoop();
 
   return {
-    pause: stopLoop,
-    resume: startLoop,
+    pause: () => {
+      paused = true;
+      stopLoop();
+    },
+    resume: () => {
+      paused = false;
+      startLoop();
+    },
     restart: () => {
       initGame();
+      paused = false;
       startLoop();
     },
     destroy: () => {
