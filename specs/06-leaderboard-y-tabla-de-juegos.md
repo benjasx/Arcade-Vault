@@ -1,6 +1,6 @@
 # SPEC 06 — Leaderboard real y tabla de juegos en Supabase (con auth real)
 
-> **Status:** aprobado
+> **Status:** implementado
 > **Depends on:** SPEC 01, SPEC 04
 > **Date:** 2026-09-05
 > **Objective:** Sustituir la auth simulada por Supabase Auth (email/contraseña + OAuth Google/GitHub) y mover el catálogo y las puntuaciones a las tablas `games` y `scores` de Supabase, de modo que los leaderboards de `/juego/[id]` y `/salon` muestren la mejor marca real por usuario.
@@ -150,7 +150,7 @@ RLS (resumen):
 | `profiles` | público | `update` solo si `auth.uid() = id`; `insert` vía trigger |
 | `scores`   | público | ninguno directo; escritura solo por `submit_score`       |
 
-Formas nuevas en el frontend:
+Formas nuevas en el frontend::
 
 ```ts
 // lib/leaderboard.ts
