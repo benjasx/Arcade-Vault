@@ -1,5 +1,6 @@
 import { HallOfFame } from "@/components/hall-of-fame";
 import { createClient } from "@/lib/supabase/server";
+import { isPlayable } from "@/lib/games";
 import type { LeaderRow } from "@/lib/leaderboard";
 
 type MineRow = { rank: number; name: string; score: number; updated_at: string };
@@ -49,5 +50,10 @@ export default async function SalonPage() {
     }
   }
 
-  return <HallOfFame games={games ?? []} boards={boards} mine={mine} />;
+  // Solo juegos jugables o con al menos una marca registrada.
+  const visibleGames = (games ?? []).filter(
+    (g) => isPlayable(g.id) || (boards[g.id]?.length ?? 0) > 0,
+  );
+
+  return <HallOfFame games={visibleGames} boards={boards} mine={mine} />;
 }

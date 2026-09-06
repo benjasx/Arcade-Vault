@@ -396,6 +396,11 @@ a {
 .btn:active {
   transform: translateY(1px) scale(0.98);
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+  pointer-events: none;
+}
 
 .btn.magenta {
   border-color: var(--magenta);

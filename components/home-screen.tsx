@@ -7,6 +7,23 @@ import type { Game } from "@/lib/games";
 type FeatureKind = "GAMEPAD" | "FREE" | "TROPHY" | "ROCKET";
 type FeatureColor = "cyan" | "magenta" | "yellow" | "green";
 
+export type ActivityRow = { name: string; game: string; score: number; updatedAt: string };
+export type TopScoreRow = { rank: number; name: string; score: number };
+
+const NEON_CYCLE: FeatureColor[] = ["magenta", "yellow", "green", "cyan"];
+
+function timeAgo(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const s = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (s < 60) return "hace un momento";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
 function useReveal() {
   useEffect(() => {
     const els = document.querySelectorAll(".reveal");
@@ -231,33 +248,18 @@ const FEATURES: { i: FeatureKind; t: string; d: string; c: FeatureColor }[] = [
   },
 ];
 
-const STATS: { n: string; u: string; s: string }[] = [
-  { n: "12+", u: "JUEGOS", s: "Y CONTANDO" },
-  { n: "MILES", u: "DE PARTIDAS", s: "JUGADAS CADA DÍA" },
-  { n: "GLOBAL", u: "RANKING", s: "COMPITE CON EL MUNDO" },
-];
-
-const RECENT: { p: string; g: string; s: number; t: string; c: FeatureColor }[] = [
-  { p: "NEONFOX", g: "Caída", s: 184220, t: "hace 2 min", c: "magenta" },
-  { p: "PX_KAI", g: "Glotón", s: 96400, t: "hace 5 min", c: "yellow" },
-  { p: "Z3R0COOL", g: "Invasores", s: 54190, t: "hace 8 min", c: "green" },
-  { p: "VAULT_07", g: "Rocas", s: 41200, t: "hace 12 min", c: "cyan" },
-  { p: "GLITCHA", g: "Bloque Buster", s: 28450, t: "hace 18 min", c: "cyan" },
-  { p: "ARKADYA", g: "Serpentina", s: 7820, t: "hace 24 min", c: "green" },
-  { p: "CYBER_LU", g: "Ranaria", s: 18900, t: "hace 31 min", c: "yellow" },
-];
-
-const TOP_TODAY: { r: number; p: string; s: number }[] = [
-  { r: 1, p: "NEONFOX", s: 312840 },
-  { r: 2, p: "PX_KAI", s: 248110 },
-  { r: 3, p: "M00NRYU", s: 196720 },
-  { r: 4, p: "VAULT_07", s: 154300 },
-  { r: 5, p: "GLITCHA", s: 138900 },
-];
-
-export function HomeScreen({ games }: { games: Game[] }) {
+export function HomeScreen({
+  games,
+  recent,
+  topScores,
+}: {
+  games: Game[];
+  recent: ActivityRow[];
+  topScores: TopScoreRow[];
+}) {
   const router = useRouter();
   useReveal();
+  const showActivity = recent.length > 0 || topScores.length > 0;
 
   return (
     <div className="home fade-in">
@@ -316,88 +318,91 @@ export function HomeScreen({ games }: { games: Game[] }) {
       </section>
 
       {/* GAMES PREVIEW */}
-      <section className="home-section reveal">
-        <div className="section-head">
-          <div className="kicker pixel neon-cyan">{"// 02"}</div>
-          <h2 className="section-title">JUEGOS DISPONIBLES AHORA</h2>
-          <div className="section-rule" />
-        </div>
-        <div className="mini-rail">
-          {games.slice(0, 6).map((g) => (
-            <MiniCard key={g.id} game={g} onClick={() => router.push(`/juego/${g.id}`)} />
-          ))}
-        </div>
-        <div style={{ textAlign: "center", marginTop: 24 }}>
-          <button className="btn lg" onClick={() => router.push("/juegos")}>
-            VER TODOS LOS JUEGOS →
-          </button>
-        </div>
-      </section>
-
-      {/* STATS */}
-      <section className="home-stats reveal">
-        <div className="stats-inner">
-          {STATS.map((st, i) => (
-            <div key={st.u} className="stat-block" style={{ transitionDelay: i * 90 + "ms" }}>
-              <div className="stat-n neon-yellow">{st.n}</div>
-              <div className="stat-u pixel">{st.u}</div>
-              <div className="stat-s">{st.s}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {games.length > 0 && (
+        <section className="home-section reveal">
+          <div className="section-head">
+            <div className="kicker pixel neon-cyan">{"// 02"}</div>
+            <h2 className="section-title">JUEGOS DISPONIBLES AHORA</h2>
+            <div className="section-rule" />
+          </div>
+          <div className="mini-rail">
+            {games.slice(0, 6).map((g) => (
+              <MiniCard key={g.id} game={g} onClick={() => router.push(`/juego/${g.id}`)} />
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 24 }}>
+            <button className="btn lg" onClick={() => router.push("/juegos")}>
+              VER TODOS LOS JUEGOS →
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* RECENT ACTIVITY / LEADERBOARD */}
-      <section className="home-section reveal">
-        <div className="section-head">
-          <div className="kicker pixel neon-yellow">{"// 03"}</div>
-          <h2 className="section-title">ACTIVIDAD EN VIVO</h2>
-          <div className="section-rule" />
-        </div>
-        <div className="activity-grid">
-          <div className="activity-card">
-            <div className="ac-head">
-              <div className="ac-title pixel">▸ ÚLTIMAS PUNTUACIONES</div>
-            </div>
-            <div className="ticker">
-              {RECENT.map((r, i) => (
-                <div key={r.p + r.g} className="tick-row" style={{ animationDelay: i * 60 + "ms" }}>
-                  <span className={"tk-p neon-" + r.c}>{r.p}</span>
-                  <span className="tk-mid">▸ {r.g}</span>
-                  <span className="tk-s">+{r.s.toLocaleString("es-ES")}</span>
-                  <span className="tk-t">{r.t}</span>
-                </div>
-              ))}
-            </div>
+      {showActivity && (
+        <section className="home-section reveal">
+          <div className="section-head">
+            <div className="kicker pixel neon-yellow">{"// 03"}</div>
+            <h2 className="section-title">PUNTUACIONES DE LA COMUNIDAD</h2>
+            <div className="section-rule" />
           </div>
+          <div className="activity-grid">
+            {recent.length > 0 && (
+              <div className="activity-card">
+                <div className="ac-head">
+                  <div className="ac-title pixel">▸ ÚLTIMAS PUNTUACIONES</div>
+                </div>
+                <div className="ticker">
+                  {recent.map((r, i) => (
+                    <div
+                      key={r.name + r.game + r.updatedAt}
+                      className="tick-row"
+                      style={{ animationDelay: i * 60 + "ms" }}
+                    >
+                      <span className={"tk-p neon-" + NEON_CYCLE[i % NEON_CYCLE.length]}>
+                        {r.name}
+                      </span>
+                      <span className="tk-mid">▸ {r.game}</span>
+                      <span className="tk-s">+{r.score.toLocaleString("es-ES")}</span>
+                      <span className="tk-t" suppressHydrationWarning>
+                        {timeAgo(r.updatedAt)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          <div className="activity-card">
-            <div className="ac-head">
-              <div className="ac-title pixel neon-magenta">▸ TOP JUGADORES · HOY</div>
-              <button className="lb-link" onClick={() => router.push("/salon")}>
-                VER SALÓN →
-              </button>
-            </div>
-            <div className="top-list">
-              {TOP_TODAY.map((r, i) => (
-                <div
-                  key={r.p}
-                  className={
-                    "top-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
-                  }
-                >
-                  <span className="tp-rk">#{String(r.r).padStart(2, "0")}</span>
-                  <span className="tp-bar">
-                    <span className="tp-fill" style={{ width: 100 - i * 16 + "%" }} />
-                  </span>
-                  <span className="tp-p">{r.p}</span>
-                  <span className="tp-s">{r.s.toLocaleString("es-ES")}</span>
+            {topScores.length > 0 && (
+              <div className="activity-card">
+                <div className="ac-head">
+                  <div className="ac-title pixel neon-magenta">▸ MEJORES PUNTUACIONES</div>
+                  <button className="lb-link" onClick={() => router.push("/salon")}>
+                    VER SALÓN →
+                  </button>
                 </div>
-              ))}
-            </div>
+                <div className="top-list">
+                  {topScores.map((r, i) => (
+                    <div
+                      key={r.name + r.rank}
+                      className={
+                        "top-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
+                      }
+                    >
+                      <span className="tp-rk">#{String(r.rank).padStart(2, "0")}</span>
+                      <span className="tp-bar">
+                        <span className="tp-fill" style={{ width: 100 - i * 16 + "%" }} />
+                      </span>
+                      <span className="tp-p">{r.name}</span>
+                      <span className="tp-s">{r.score.toLocaleString("es-ES")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* PRICING */}
       <section className="home-section reveal">

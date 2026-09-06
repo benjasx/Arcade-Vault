@@ -30,7 +30,7 @@ export function GameDetail({ game, scores }: { game: Game; scores: LeaderRow[] }
           <p>{game.long}</p>
           <div className="stat-strip">
             <div>
-              <div className="l">Partidas</div>
+              <div className="l">Partidas jugadas</div>
               <div className="v">{game.plays.toLocaleString("es-ES")}</div>
             </div>
             <div>

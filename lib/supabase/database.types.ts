@@ -8,6 +8,43 @@ export type Database = {
   };
   public: {
     Tables: {
+      game_plays: {
+        Row: {
+          game_id: string;
+          plays: number;
+        };
+        Insert: {
+          game_id: string;
+          plays?: number;
+        };
+        Update: {
+          game_id?: string;
+          plays?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "game_plays_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: true;
+            referencedRelation: "game_stats";
+            referencedColumns: ["game_id"];
+          },
+          {
+            foreignKeyName: "game_plays_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: true;
+            referencedRelation: "games";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "game_plays_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: true;
+            referencedRelation: "games_with_stats";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       games: {
         Row: {
           cat: string;
@@ -162,6 +199,7 @@ export type Database = {
       };
     };
     Functions: {
+      increment_play: { Args: { p_game_id: string }; Returns: undefined };
       submit_score: {
         Args: { p_game_id: string; p_score: number };
         Returns: undefined;
