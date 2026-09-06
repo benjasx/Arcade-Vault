@@ -246,9 +246,60 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   const nextCtx: CanvasRenderingContext2D = maybeNextCtx;
 
   // ── Audio ──────────────────────────────────────────────────────────────────
-  // WebAudio sintetizado (sin assets). El AudioContext se abre en el primer
-  // `keydown` para cumplir la política de autoplay (pasos 6).
+  // WebAudio sintetizado (sin assets). El AudioContext se abre de forma perezosa
+  // en el primer sonido (línea limpiada tras un keydown) para cumplir la política
+  // de autoplay.
   let audioCtx: AudioContext | null = null;
+
+  function getAudioCtx(): AudioContext {
+    if (!audioCtx) {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audioCtx = new AC();
+    }
+    return audioCtx;
+  }
+
+  function playTone(
+    freq: number,
+    duration: number,
+    type: OscillatorType = "square",
+    delay = 0,
+    gainValue = 0.15,
+  ) {
+    const ac = getAudioCtx();
+    if (ac.state === "suspended") void ac.resume();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const startTime = ac.currentTime + delay;
+    gain.gain.setValueAtTime(gainValue, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  }
+
+  function playComboSound(comboCount: number) {
+    playTone(440 + Math.min(comboCount, 10) * 60, 0.15);
+  }
+
+  function playTSpinSound() {
+    playTone(660, 0.1);
+    playTone(880, 0.12, "square", 0.08);
+  }
+
+  function playB2BSound() {
+    playTone(330, 0.12);
+    playTone(660, 0.15, "square", 0.1);
+  }
+
+  function playPerfectClearSound() {
+    [523, 659, 784, 1046].forEach((f, i) => playTone(f, 0.18, "triangle", i * 0.09, 0.18));
+  }
 
   // ── Input ──────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
@@ -261,8 +312,50 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   let board: Board = createBoard();
   let wildcard: WildcardGrid = createWildcardGrid();
   let current: Piece = randomPiece(false, false);
+  let next: Piece = randomPiece(false, false);
   let lastActionWasRotate = false;
-  // score / lines / level / next / combo / freeze / … se añaden en los pasos 5–6.
+  let score = 0;
+  let lines = 0;
+  let level = 1;
+  const startLevel = 1; // fijo: se podó el selector de nivel inicial del original
+  let paused = false;
+  let gameOver = false;
+  // Garantiza una única llamada a `opts.onGameOver` por partida.
+  let gameOverNotified = false;
+  let dropAccum = 0;
+  let dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+  let freezeRemaining = 0;
+  let linesSincePowerup = 0;
+  let pendingPowerup = false;
+  let pendingSingle = false;
+  let combo = 0;
+  let b2bTetrisActive = false;
+
+  // Popup transitorio de combo / T-spin: se dibuja en la franja superior del
+  // canvas del tablero con fade corto (~900 ms). Detalle de render en el paso 6.
+  let popupLines: string[] = [];
+  let popupGained = 0;
+  let popupShownAt = 0;
+
+  // ── HUD escalar → plataforma ───────────────────────────────────────────────
+  function powerupStatusText(): string {
+    if (freezeRemaining > 0) return `❄️ ${(freezeRemaining / 1000).toFixed(1)}s`;
+    if (next.powerup) {
+      const info = POWERUP_INFO[next.powerup];
+      return `${info.symbol} ${info.label}`;
+    }
+    return `${POWERUP_INTERVAL - linesSincePowerup} líneas`;
+  }
+
+  function emitStats() {
+    opts.onStats({ score, lines, level, powerupLabel: powerupStatusText() });
+  }
+
+  function showComboPopup(messages: string[], gained: number) {
+    popupLines = messages;
+    popupGained = gained;
+    popupShownAt = performance.now();
+  }
 
   // ── Utilidades con estado de partida (port literal de game.js) ─────────────
   function collide(shape: number[][], ox: number, oy: number): boolean {
@@ -362,12 +455,219 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
     wildcard[r][c] = false;
   }
 
+  // ── Lógica de partida (port literal de game.js) ───────────────────────────
+  function clearLines() {
+    const wasTSpin = detectTSpin();
+    let cleared = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      const emptyCount = board[r].filter((v) => v === 0).length;
+      // fila con huecos: se completa gastando comodines "tinte" de cualquier parte del tablero
+      const wildcardAssist = emptyCount > 0 && emptyCount < COLS && countWildcards() >= emptyCount;
+      if (emptyCount === 0 || wildcardAssist) {
+        if (wildcardAssist) consumeWildcards(emptyCount);
+        removeRow(r);
+        cleared++;
+        r++;
+      }
+    }
+
+    if (!cleared) {
+      combo = 0;
+      return;
+    }
+
+    lines += cleared;
+    combo++;
+    const messages: string[] = [];
+    let gained = wasTSpin ? TSPIN_SCORES[cleared] * level : LINE_SCORES[cleared] * level;
+
+    if (wasTSpin) {
+      messages.push(`T-SPIN ${TSPIN_LABELS[cleared]}!`);
+      playTSpinSound();
+    }
+
+    if (cleared === 4) {
+      if (b2bTetrisActive) {
+        gained += Math.floor(gained * B2B_TETRIS_BONUS);
+        messages.push("B2B TETRIS!");
+        playB2BSound();
+      }
+      b2bTetrisActive = true;
+    } else {
+      b2bTetrisActive = false;
+    }
+
+    if (combo > 1) {
+      gained *= combo;
+      messages.push(`COMBO x${combo}`);
+      playComboSound(combo);
+    }
+
+    const perfectClear = isBoardEmpty();
+    if (perfectClear) {
+      gained += PERFECT_CLEAR_SCORES[cleared] * level;
+      messages.push("PERFECT CLEAR!");
+      playPerfectClearSound();
+    }
+
+    score += gained;
+    level = Math.max(startLevel, Math.floor(lines / 10) + 1);
+    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    linesSincePowerup += cleared;
+    if (linesSincePowerup >= POWERUP_INTERVAL) {
+      linesSincePowerup -= POWERUP_INTERVAL;
+      pendingPowerup = true;
+    }
+    if (cleared === 4) {
+      pendingSingle = true;
+    }
+    if (messages.length) showComboPopup(messages, gained);
+    emitStats();
+  }
+
+  function hardDrop() {
+    const gy = ghostY();
+    score += (gy - current.y) * 2;
+    current.y = gy;
+    lockPiece();
+  }
+
+  function softDrop() {
+    if (!collide(current.shape, current.x, current.y + 1)) {
+      current.y++;
+      lastActionWasRotate = false;
+      score += 1;
+      emitStats();
+    } else {
+      lockPiece();
+    }
+  }
+
+  // ── Power-ups (port literal) ──────────────────────────────────────────────
+  function applyBomb() {
+    const { cx, cy } = powerupCenter();
+    for (let r = cy - 1; r <= cy + 1; r++) for (let c = cx - 1; c <= cx + 1; c++) clearCell(r, c);
+  }
+
+  function applyLightning() {
+    const { cx, cy } = powerupCenter();
+    for (let c = 0; c < COLS; c++) clearCell(cy, c);
+    for (let r = 0; r < ROWS; r++) clearCell(r, cx);
+  }
+
+  function applyDye() {
+    const present = new Set<number>();
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) if (board[r][c]) present.add(board[r][c]);
+    if (present.size === 0) return;
+    const colors = [...present];
+    const target = colors[Math.floor(Math.random() * colors.length)];
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) if (board[r][c] === target) wildcard[r][c] = true;
+  }
+
+  function applyGravityPowerup() {
+    for (let c = 0; c < COLS; c++) {
+      const colorStack: number[] = [];
+      const wildStack: boolean[] = [];
+      for (let r = 0; r < ROWS; r++) {
+        if (board[r][c] !== 0) {
+          colorStack.push(board[r][c]);
+          wildStack.push(wildcard[r][c]);
+        }
+      }
+      for (let r = 0; r < ROWS; r++) {
+        board[r][c] = 0;
+        wildcard[r][c] = false;
+      }
+      const startRow = ROWS - colorStack.length;
+      for (let i = 0; i < colorStack.length; i++) {
+        board[startRow + i][c] = colorStack[i];
+        wildcard[startRow + i][c] = wildStack[i];
+      }
+    }
+  }
+
+  function applyFreeze() {
+    freezeRemaining = FREEZE_MS;
+  }
+
+  function applyPowerup(type: PowerupType) {
+    switch (type) {
+      case "bomb":
+        applyBomb();
+        break;
+      case "lightning":
+        applyLightning();
+        break;
+      case "dye":
+        applyDye();
+        break;
+      case "gravity":
+        applyGravityPowerup();
+        break;
+      case "freeze":
+        applyFreeze();
+        break;
+    }
+    score += POWERUP_SCORE;
+  }
+
+  function lockPiece() {
+    if (current.powerup) {
+      applyPowerup(current.powerup);
+    } else {
+      merge();
+    }
+    clearLines();
+    spawn();
+  }
+
+  function spawn() {
+    current = next;
+    next = randomPiece(pendingPowerup, pendingSingle);
+    pendingPowerup = false;
+    pendingSingle = false;
+    lastActionWasRotate = false;
+    if (collide(current.shape, current.x, current.y)) {
+      endGame();
+    }
+    drawNext();
+    emitStats();
+  }
+
+  function endGame() {
+    gameOver = true;
+    stopLoop();
+    draw();
+    if (!gameOverNotified) {
+      gameOverNotified = true;
+      opts.onGameOver(score);
+    }
+  }
+
   function initGame() {
     board = createBoard();
     wildcard = createWildcardGrid();
-    current = randomPiece(false, false);
+    score = 0;
+    lines = 0;
+    level = startLevel;
+    paused = false;
+    gameOver = false;
+    gameOverNotified = false;
+    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    dropAccum = 0;
+    linesSincePowerup = 0;
+    pendingPowerup = false;
+    pendingSingle = false;
+    freezeRemaining = 0;
+    combo = 0;
+    b2bTetrisActive = false;
     lastActionWasRotate = false;
-    // El reset completo (score, lines, level, next, spawn, …) se añade en el paso 5.
+    popupLines = [];
+    next = randomPiece(false, false);
+    spawn();
+    emitStats();
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────────
@@ -375,6 +675,10 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
     ctx.fillStyle = "#0b0e13";
     ctx.fillRect(0, 0, BOARD_W, BOARD_H);
     nextCtx.clearRect(0, 0, NEXT_W, NEXT_H);
+  }
+
+  function drawNext() {
+    // Preview de la siguiente pieza sobre `opts.nextCanvas`; implementación en el paso 6.
   }
 
   // ── Loop ───────────────────────────────────────────────────────────────────
