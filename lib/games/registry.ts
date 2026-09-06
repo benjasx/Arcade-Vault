@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import { AsteroidsPlayer } from "@/components/asteroids-player";
+import { TetrisPlayer } from "@/components/tetris-player";
 import type { Game } from "@/lib/games";
 
 /**
@@ -10,6 +11,7 @@ import type { Game } from "@/lib/games";
  */
 export const GAME_REGISTRY: Record<string, ComponentType<{ game: Game }>> = {
   rocas: AsteroidsPlayer,
+  tetris: TetrisPlayer,
 };
 
 export function playerFor(id: string): ComponentType<{ game: Game }> | null {
