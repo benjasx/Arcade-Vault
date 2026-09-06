@@ -2,15 +2,10 @@
 
 import { useMemo, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CATS, GAMES, type Game } from "@/lib/data";
+import { CATS } from "@/lib/data";
+import type { Game } from "@/lib/games";
 
-function GameCard({
-  game,
-  onSelect,
-}: {
-  game: Game;
-  onSelect: (game: Game) => void;
-}) {
+function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => void }) {
   const tiltRef = useRef<HTMLDivElement>(null);
 
   const onMove = (e: MouseEvent<HTMLDivElement>) => {
@@ -27,8 +22,7 @@ function GameCard({
     el.style.transform = "";
   };
 
-  const colorClass =
-    game.color === "magenta" ? "magenta" : game.color === "yellow" ? "yellow" : "";
+  const colorClass = game.color === "magenta" ? "magenta" : game.color === "yellow" ? "yellow" : "";
 
   return (
     <div
@@ -65,18 +59,16 @@ function GameCard({
   );
 }
 
-export function LibraryScreen() {
+export function LibraryScreen({ games }: { games: Game[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>("TODOS");
 
   const filtered = useMemo(() => {
-    return GAMES.filter(
-      (g) =>
-        (cat === "TODOS" || g.cat === cat) &&
-        g.title.toLowerCase().includes(q.toLowerCase()),
+    return games.filter(
+      (g) => (cat === "TODOS" || g.cat === cat) && g.title.toLowerCase().includes(q.toLowerCase()),
     );
-  }, [q, cat]);
+  }, [games, q, cat]);
 
   const open = (game: Game) => router.push(`/juego/${game.id}`);
 

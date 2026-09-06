@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { saveScore } from "@/lib/scores";
-import type { Game } from "@/lib/data";
+import { submitScore } from "@/lib/leaderboard";
+import type { Game } from "@/lib/games";
 
 export function GamePlayer({ game }: { game: Game }) {
   const router = useRouter();
@@ -14,19 +14,16 @@ export function GamePlayer({ game }: { game: Game }) {
   const [lives] = useState(3);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
-  // Nombre inicial: el del usuario si hay sesión, si no "INVITADO".
-  const [name, setName] = useState<string>(() => user?.name ?? "INVITADO");
   const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   // Nivel derivado del score: sube al cruzar cada umbral de 2500 puntos.
   const level = Math.floor(score / 2500) + 1;
 
   useEffect(() => {
     if (over || paused) return;
-    const t = setInterval(
-      () => setScore((s) => s + Math.floor(10 + Math.random() * 90)),
-      220,
-    );
+    const t = setInterval(() => setScore((s) => s + Math.floor(10 + Math.random() * 90)), 220);
     return () => clearInterval(t);
   }, [over, paused]);
 
@@ -36,6 +33,20 @@ export function GamePlayer({ game }: { game: Game }) {
     setPaused(false);
     setOver(false);
     setSaved(false);
+    setSaveErr(null);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setSaveErr(null);
+    try {
+      await submitScore(game.id, score);
+      setSaved(true);
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -45,7 +56,7 @@ export function GamePlayer({ game }: { game: Game }) {
           <div className="hud-stat">
             <div className="l">Jugador</div>
             <div className="v" style={{ color: "var(--ink)" }}>
-              {name}
+              {user?.name ?? "INVITADO"}
             </div>
           </div>
           <div className="hud-stat">
@@ -68,10 +79,7 @@ export function GamePlayer({ game }: { game: Game }) {
           <button className="btn magenta" onClick={endGame}>
             FIN
           </button>
-          <button
-            className="btn ghost"
-            onClick={() => router.push(`/juego/${game.id}`)}
-          >
+          <button className="btn ghost" onClick={() => router.push(`/juego/${game.id}`)}>
             SALIR
           </button>
         </div>
@@ -87,10 +95,7 @@ export function GamePlayer({ game }: { game: Game }) {
             <div className="player-ship" />
           </div>
           {paused && (
-            <div
-              className="crt-content"
-              style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}
-            >
+            <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
               <div>
                 <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
                   EN PAUSA
@@ -123,36 +128,27 @@ export function GamePlayer({ game }: { game: Game }) {
             <h2>FIN DEL JUEGO</h2>
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{score.toLocaleString("es-ES")}</div>
-            {!saved ? (
-              <div className="input-row">
-                <input
-                  value={name}
-                  onChange={(e) =>
-                    setName(e.target.value.toUpperCase().slice(0, 10))
-                  }
-                  placeholder="TUS INICIALES"
-                />
-                <button
-                  className="btn yellow"
-                  onClick={() => {
-                    saveScore({ game: game.id, score, name });
-                    setSaved(true);
-                  }}
-                >
-                  GUARDAR PUNTUACIÓN
-                </button>
-              </div>
-            ) : (
+            {!user ? (
+              <button className="btn yellow" onClick={() => router.push("/login")}>
+                INICIA SESIÓN PARA GUARDAR
+              </button>
+            ) : saved ? (
               <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
+            ) : (
+              <button className="btn yellow" disabled={busy} onClick={save}>
+                {busy ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
+              </button>
+            )}
+            {saveErr && (
+              <div className="mono neon-magenta" style={{ fontSize: 11, marginTop: 8 }}>
+                ▸ {saveErr}
+              </div>
             )}
             <div className="actions">
               <button className="btn" onClick={restart}>
                 JUGAR DE NUEVO
               </button>
-              <button
-                className="btn magenta"
-                onClick={() => router.push("/juegos")}
-              >
+              <button className="btn magenta" onClick={() => router.push("/juegos")}>
                 VOLVER AL VAULT
               </button>
             </div>

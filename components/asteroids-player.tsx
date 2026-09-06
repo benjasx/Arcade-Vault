@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { createAsteroidsGame, type AsteroidsHandle } from "@/lib/games/asteroids";
-import { saveScore } from "@/lib/scores";
-import type { Game } from "@/lib/data";
+import { submitScore } from "@/lib/leaderboard";
+import type { Game } from "@/lib/games";
 
 /**
  * Reproductor del juego real de asteroides (solo para la entrada `rocas`).
@@ -23,9 +23,9 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
-  // Nombre inicial: el del usuario si hay sesión, si no "INVITADO".
-  const [name, setName] = useState<string>(() => user?.name ?? "INVITADO");
   const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
 
   useEffect(() => {
     const h = createAsteroidsGame(canvasRef.current!, {
@@ -57,7 +57,21 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
     handleRef.current?.restart();
     setOver(false);
     setSaved(false);
+    setSaveErr(null);
     setPaused(false);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setSaveErr(null);
+    try {
+      await submitScore(game.id, finalScore);
+      setSaved(true);
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -116,25 +130,21 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
             <h2>FIN DEL JUEGO</h2>
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{finalScore.toLocaleString("es-ES")}</div>
-            {!saved ? (
-              <div className="input-row">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value.toUpperCase().slice(0, 10))}
-                  placeholder="TUS INICIALES"
-                />
-                <button
-                  className="btn yellow"
-                  onClick={() => {
-                    saveScore({ game: game.id, score: finalScore, name });
-                    setSaved(true);
-                  }}
-                >
-                  GUARDAR PUNTUACIÓN
-                </button>
-              </div>
-            ) : (
+            {!user ? (
+              <button className="btn yellow" onClick={() => router.push("/login")}>
+                INICIA SESIÓN PARA GUARDAR
+              </button>
+            ) : saved ? (
               <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
+            ) : (
+              <button className="btn yellow" disabled={busy} onClick={save}>
+                {busy ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
+              </button>
+            )}
+            {saveErr && (
+              <div className="mono neon-magenta" style={{ fontSize: 11, marginTop: 8 }}>
+                ▸ {saveErr}
+              </div>
             )}
             <div className="actions">
               <button className="btn" onClick={playAgain}>

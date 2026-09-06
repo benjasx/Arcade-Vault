@@ -1,23 +1,62 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
+import { createClient } from "@/lib/supabase/client";
 
 export function AuthForm() {
   const router = useRouter();
-  const { signIn, signOut } = useAuth();
+  const supabase = createClient();
 
   const [tab, setTab] = useState<"in" | "up">("in");
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    signIn(user || "PLAYER1");
-    router.push("/juegos");
+  const switchTab = (next: "in" | "up") => {
+    setTab(next);
+    setError(null);
   };
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      if (tab === "in") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password: pass,
+          options: { data: { name: name.toUpperCase().slice(0, 10) } },
+        });
+        if (error) throw error;
+      }
+      router.push("/juegos");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo completar la operación.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function oauth(provider: "google" | "github") {
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) setError(error.message);
+  }
 
   return (
     <div className="av-auth-wrap fade-in">
@@ -39,40 +78,36 @@ export function AuthForm() {
         </div>
 
         <div className="auth-tabs">
-          <button
-            className={tab === "in" ? "on" : ""}
-            onClick={() => setTab("in")}
-          >
+          <button className={tab === "in" ? "on" : ""} onClick={() => switchTab("in")}>
             INICIAR SESIÓN
           </button>
-          <button
-            className={tab === "up" ? "on" : ""}
-            onClick={() => setTab("up")}
-          >
+          <button className={tab === "up" ? "on" : ""} onClick={() => switchTab("up")}>
             CREAR CUENTA
           </button>
         </div>
 
         <form onSubmit={submit}>
-          <div className="field">
-            <label>Usuario</label>
-            <input
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-              placeholder="px_kai"
-            />
-          </div>
           {tab === "up" && (
             <div className="field slide-in">
-              <label>Correo electrónico</label>
+              <label>Nombre de arcade</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jugador@vault.gg"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="PX_KAI"
+                maxLength={10}
+                style={{ textTransform: "uppercase" }}
               />
             </div>
           )}
+          <div className="field">
+            <label>Correo electrónico</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="jugador@vault.gg"
+            />
+          </div>
           <div className="field">
             <label>Contraseña</label>
             <input
@@ -83,33 +118,45 @@ export function AuthForm() {
             />
           </div>
 
+          {error && (
+            <div
+              className="mono neon-magenta"
+              style={{ fontSize: 12, letterSpacing: "0.04em", marginTop: 4 }}
+            >
+              ▸ {error}
+            </div>
+          )}
+
           <button
             className="btn lg"
             type="submit"
+            disabled={busy}
             style={{ width: "100%", marginTop: 8 }}
           >
-            {tab === "in" ? "ENTRAR AL VAULT" : "CREAR Y JUGAR"}
+            {busy ? "PROCESANDO…" : tab === "in" ? "ENTRAR AL VAULT" : "CREAR Y JUGAR"}
           </button>
         </form>
 
-        <button
+        <Link
           className="btn ghost"
-          style={{ width: "100%", marginTop: 10 }}
-          onClick={() => {
-            signOut();
-            router.push("/juegos");
+          href="/juegos"
+          style={{
+            width: "100%",
+            marginTop: 10,
+            display: "block",
+            textAlign: "center",
           }}
         >
           JUGAR COMO INVITADO
-        </button>
+        </Link>
 
         <div className="auth-divider">O CONTINÚA CON</div>
         <div className="social">
-          <button className="btn ghost" type="button">
-            ◆  GOOGLE
+          <button className="btn ghost" type="button" onClick={() => oauth("google")}>
+            ◆ GOOGLE
           </button>
-          <button className="btn ghost" type="button">
-            ▣  GITHUB
+          <button className="btn ghost" type="button" onClick={() => oauth("github")}>
+            ▣ GITHUB
           </button>
         </div>
 

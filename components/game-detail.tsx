@@ -1,15 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { Game, ScoreRow } from "@/lib/data";
+import type { Game } from "@/lib/games";
+import type { LeaderRow } from "@/lib/leaderboard";
 
-export function GameDetail({
-  game,
-  scores,
-}: {
-  game: Game;
-  scores: ScoreRow[];
-}) {
+function fmtDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-ES");
+}
+
+export function GameDetail({ game, scores }: { game: Game; scores: LeaderRow[] }) {
   const router = useRouter();
 
   return (
@@ -30,7 +31,7 @@ export function GameDetail({
           <div className="stat-strip">
             <div>
               <div className="l">Partidas</div>
-              <div className="v">{game.plays}</div>
+              <div className="v">{game.plays.toLocaleString("es-ES")}</div>
             </div>
             <div>
               <div className="l">Mejor global</div>
@@ -58,16 +59,10 @@ export function GameDetail({
             </div>
           </div>
           <div className="detail-actions">
-            <button
-              className="btn xl pulse"
-              onClick={() => router.push(`/juego/${game.id}/jugar`)}
-            >
-              ▶  JUGAR AHORA
+            <button className="btn xl pulse" onClick={() => router.push(`/juego/${game.id}/jugar`)}>
+              ▶ JUGAR AHORA
             </button>
-            <button
-              className="btn ghost lg"
-              onClick={() => router.push("/juegos")}
-            >
+            <button className="btn ghost lg" onClick={() => router.push("/juegos")}>
               VOLVER AL VAULT
             </button>
           </div>
@@ -77,12 +72,24 @@ export function GameDetail({
       <aside>
         <div className="leaderboard">
           <h3>MEJORES PUNTUACIONES</h3>
+          {scores.length === 0 && (
+            <div
+              style={{
+                padding: "24px 8px",
+                textAlign: "center",
+                color: "var(--ink-faint)",
+                fontSize: 12,
+                letterSpacing: "0.1em",
+              }}
+            >
+              AÚN NADIE HA MARCADO. SÉ EL PRIMERO.
+            </div>
+          )}
           {scores.map((r, i) => (
             <div
-              key={r.name}
+              key={r.rank + "-" + r.name}
               className={
-                "lb-row" +
-                (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
+                "lb-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
               }
             >
               <div className="rk">#{String(r.rank).padStart(2, "0")}</div>
@@ -95,7 +102,7 @@ export function GameDetail({
                     letterSpacing: "0.1em",
                   }}
                 >
-                  {r.date}
+                  {fmtDate(r.updated_at)}
                 </div>
               </div>
               <div className="sc">{r.score.toLocaleString("es-ES")}</div>
