@@ -822,6 +822,34 @@ a {
   filter: drop-shadow(0 0 6px rgba(0, 245, 255, 0.4));
 }
 
+/* TETRABYTE: piezas cayendo por el pozo (cyan / magenta / yellow) */
+.cover-tetris {
+  background: linear-gradient(180deg, #04202b, #0a0a18 72%);
+}
+.cover-tetris::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) 18% 12% / 44px 44px no-repeat,
+    linear-gradient(var(--magenta), var(--magenta)) 52% 26% / 22px 88px no-repeat,
+    linear-gradient(var(--yellow), var(--yellow)) 74% 54% / 22px 66px no-repeat,
+    linear-gradient(var(--yellow), var(--yellow)) 74% 76% / 66px 22px no-repeat,
+    linear-gradient(rgba(0, 245, 255, 0.5), rgba(0, 245, 255, 0.5)) 18% 66% / 44px 22px no-repeat,
+    linear-gradient(rgba(0, 245, 255, 0.5), rgba(0, 245, 255, 0.5)) 29% 77% / 44px 22px no-repeat;
+  filter: drop-shadow(0 0 8px rgba(0, 245, 255, 0.4));
+  image-rendering: pixelated;
+}
+.cover-tetris::before {
+  content: "◰";
+  position: absolute;
+  right: 12%;
+  top: 12%;
+  color: var(--cyan);
+  font-size: 22px;
+  text-shadow: 0 0 8px var(--cyan);
+}
+
 /* ===== detail screen ===== */
 .av-detail {
   display: grid;
@@ -1095,6 +1123,46 @@ a {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* TETRABYTE: el tablero es 1:2 (no 4:3), así que la pantalla CRT deja de forzar
+   aspect-ratio y se limita la altura; tablero + preview NEXT en una fila
+   centrada, escalados por CSS. No se reusa `.asteroids-canvas`. */
+.crt-screen.tetris {
+  aspect-ratio: auto;
+  height: clamp(360px, 68vh, 640px);
+}
+.tetris-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 3vw, 28px);
+}
+.tetris-board {
+  display: block;
+  height: 94%;
+  width: auto;
+  aspect-ratio: 1 / 2;
+  image-rendering: pixelated;
+}
+.tetris-next {
+  display: block;
+  width: clamp(52px, 8vw, 88px);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  align-self: flex-start;
+  margin-top: 6%;
+  image-rendering: pixelated;
+}
+@media (max-width: 720px) {
+  .crt-screen.tetris {
+    height: clamp(320px, 58vh, 520px);
+  }
+  .tetris-next {
+    width: 44px;
+  }
 }
 
 /* fake in-screen game */
