@@ -48,9 +48,18 @@ export function Nav() {
           <span>CRÉDITOS · 03</span>
         </div>
         {showUser ? (
-          <button className="btn ghost auth-btn" onClick={() => void signOut()}>
-            {user.name} ▾
-          </button>
+          <>
+            <span className="auth-btn" style={{ alignSelf: "center" }}>
+              {user.name}
+            </span>
+            <button
+              className="btn ghost auth-btn"
+              onClick={() => void signOut()}
+              style={{ color: "#ff3b4e", textShadow: "0 0 5px rgba(255, 59, 78, 0.45)" }}
+            >
+              Cerrar Sesión
+            </button>
+          </>
         ) : (
           <Link className="btn auth-btn" href="/login">
             Iniciar Sesión
