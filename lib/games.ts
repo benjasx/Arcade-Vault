@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { GameCategory, NeonColor } from "@/lib/data";
+import { GAME_REGISTRY } from "@/lib/games/registry";
 
 type GamesWithStatsRow = Database["public"]["Views"]["games_with_stats"]["Row"];
 
@@ -19,12 +20,10 @@ export type Game = {
   plays: number;
 };
 
-// IDs de juegos con motor real integrado en la app. El resto del catálogo sigue
-// en la BD pero no se muestra en la biblioteca hasta tener su motor.
-export const PLAYABLE_GAME_IDS = new Set<string>(["rocas"]);
-
+// Un juego es jugable si tiene una entrada en el registro central de motores.
+// El resto del catálogo sigue en la BD pero no se muestra en la biblioteca.
 export function isPlayable(id: string): boolean {
-  return PLAYABLE_GAME_IDS.has(id);
+  return id in GAME_REGISTRY;
 }
 
 export function toGame(row: GamesWithStatsRow): Game {

@@ -1,8 +1,9 @@
+import { createElement } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { toGame } from "@/lib/games";
+import { playerFor } from "@/lib/games/registry";
 import { GamePlayer } from "@/components/game-player";
-import { AsteroidsPlayer } from "@/components/asteroids-player";
 
 export default async function GamePlayerPage({ params }: PageProps<"/juego/[id]/jugar">) {
   const { id } = await params;
@@ -13,6 +14,7 @@ export default async function GamePlayerPage({ params }: PageProps<"/juego/[id]/
 
   const game = toGame({ ...row, best: 0, plays: 0 });
 
-  // `rocas` usa el motor real de asteroides; el resto sigue con la simulación.
-  return game.id === "rocas" ? <AsteroidsPlayer game={game} /> : <GamePlayer game={game} />;
+  // Los juegos con motor real salen del registro; el resto sigue con la simulación.
+  const Player = playerFor(game.id) ?? GamePlayer;
+  return createElement(Player, { game });
 }
