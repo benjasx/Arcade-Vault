@@ -59,6 +59,168 @@ const NEXT_H = 120;
 // Teclas cuyo comportamiento por defecto se cancela (scroll de página, etc.).
 const PREVENT_DEFAULT_KEYS = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
+// ── Tipos del port (las matrices de `game.js` no tenían tipo) ─────────────────
+/** 0 = celda vacía; 1–12 = índice en COLORS/PIECES. */
+type Cell = number;
+/** Tablero ROWS × COLS. */
+type Board = Cell[][];
+/** Rejilla de comodines "tinte" ROWS × COLS. */
+type WildcardGrid = boolean[][];
+type PowerupType = "bomb" | "lightning" | "dye" | "gravity" | "freeze";
+interface Piece {
+  /** Tipo 1–12; 0 si es pieza de power-up. */
+  type: number;
+  powerup?: PowerupType;
+  shape: number[][];
+  x: number;
+  y: number;
+}
+
+// ── Constantes (port literal de game.js) ─────────────────────────────────────
+const COLORS: (string | null)[] = [
+  null,
+  "#4dd0e1", // I - cyan
+  "#ffd54f", // O - yellow
+  "#ba68c8", // T - purple
+  "#81c784", // S - green
+  "#e57373", // Z - red
+  "#90caf9", // J - blue
+  "#ffb74d", // L - orange
+  "#f06292", // + (plus) - rosa
+  "#aed581", // U - verde claro
+  "#9575cd", // Y - violeta
+  "#fff59d", // single (1x1) - amarillo claro
+  "#78909c", // 3x3 hueco - gris
+];
+
+const PIECES: (number[][] | null)[] = [
+  null,
+  [
+    [0, 0, 0, 0],
+    [1, 1, 1, 1],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ], // I
+  [
+    [2, 2],
+    [2, 2],
+  ], // O
+  [
+    [0, 3, 0],
+    [3, 3, 3],
+    [0, 0, 0],
+  ], // T
+  [
+    [0, 4, 4],
+    [4, 4, 0],
+    [0, 0, 0],
+  ], // S
+  [
+    [5, 5, 0],
+    [0, 5, 5],
+    [0, 0, 0],
+  ], // Z
+  [
+    [6, 0, 0],
+    [6, 6, 6],
+    [0, 0, 0],
+  ], // J
+  [
+    [0, 0, 7],
+    [7, 7, 7],
+    [0, 0, 0],
+  ], // L
+  [
+    [0, 8, 0],
+    [8, 8, 8],
+    [0, 8, 0],
+  ], // + pentominó
+  [
+    [9, 0, 9],
+    [9, 9, 9],
+  ], // U pentominó
+  [
+    [0, 10],
+    [10, 10],
+    [0, 10],
+    [0, 10],
+  ], // Y pentominó
+  [[11]], // 1x1 (recompensa tras Tetris)
+  [
+    [12, 12, 12],
+    [12, 0, 12],
+    [12, 12, 12],
+  ], // 3x3 hueco (reto)
+];
+
+const SINGLE_TYPE = 11;
+const HOLLOW_TYPE = 12;
+const PENTOMINO_TYPES = [8, 9, 10];
+const CHALLENGE_CHANCE = 0.05; // probabilidad de pieza 3x3 hueca
+const PENTOMINO_CHANCE = 0.12; // probabilidad de pentominó (+, U, Y)
+
+const LINE_SCORES = [0, 100, 300, 500, 800];
+const TSPIN_SCORES = [0, 800, 1200, 1600]; // T-spin single/double/triple × nivel
+const TSPIN_LABELS = ["", "SINGLE", "DOUBLE", "TRIPLE"];
+const PERFECT_CLEAR_SCORES = [0, 800, 1200, 1800, 2000]; // × nivel
+const B2B_TETRIS_BONUS = 0.5; // +50% al encadenar tetris consecutivos
+
+const POWERUP_TYPES: PowerupType[] = ["bomb", "lightning", "dye", "gravity", "freeze"];
+const POWERUP_INFO: Record<PowerupType, { symbol: string; color: string; label: string }> = {
+  bomb: { symbol: "💣", color: "#ff7043", label: "BOMBA" },
+  lightning: { symbol: "⚡", color: "#fff176", label: "RAYO" },
+  dye: { symbol: "🎨", color: "#ba68c8", label: "TINTE" },
+  gravity: { symbol: "⬇️", color: "#78909c", label: "GRAVEDAD" },
+  freeze: { symbol: "❄️", color: "#4fc3f7", label: "CONGELAR" },
+};
+const POWERUP_INTERVAL = 5; // líneas despejadas entre apariciones de pieza especial
+const POWERUP_SCORE = 250;
+const FREEZE_MS = 5000;
+
+// ── Utilidades puras (sin estado de partida) ─────────────────────────────────
+function createBoard(): Board {
+  return Array.from({ length: ROWS }, () => new Array<Cell>(COLS).fill(0));
+}
+
+function createWildcardGrid(): WildcardGrid {
+  return Array.from({ length: ROWS }, () => new Array<boolean>(COLS).fill(false));
+}
+
+function randomPiece(forcePowerup: boolean, forceSingle: boolean): Piece {
+  if (forcePowerup) {
+    const powerup = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    const shape = [
+      [1, 1],
+      [1, 1],
+    ];
+    return { type: 0, powerup, shape, x: Math.floor(COLS / 2) - 1, y: 0 };
+  }
+  let type: number;
+  if (forceSingle) {
+    type = SINGLE_TYPE;
+  } else {
+    const roll = Math.random();
+    if (roll < CHALLENGE_CHANCE) {
+      type = HOLLOW_TYPE;
+    } else if (roll < CHALLENGE_CHANCE + PENTOMINO_CHANCE) {
+      type = PENTOMINO_TYPES[Math.floor(Math.random() * PENTOMINO_TYPES.length)];
+    } else {
+      type = Math.floor(Math.random() * 7) + 1;
+    }
+  }
+  const shape = PIECES[type]!.map((row) => [...row]);
+  return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+}
+
+function rotateCW(shape: number[][]): number[][] {
+  const rows = shape.length;
+  const cols = shape[0].length;
+  const result = Array.from({ length: cols }, () => new Array<number>(rows).fill(0));
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) result[c][rows - 1 - r] = shape[r][c];
+  return result;
+}
+
 export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions): TetrisHandle {
   if (typeof opts.onGameOver !== "function") {
     throw new TypeError("createTetrisGame: opts.onGameOver debe ser una función");
@@ -95,11 +257,117 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   };
   window.addEventListener("keydown", onKeyDown);
 
-  // ── Estado de la partida ───────────────────────────────────────────────────
-  // Se rellena en los pasos 4–6 (board, wildcard, current, next, score, …).
+  // ── Estado de la partida (antes `let` a nivel de módulo en game.js) ─────────
+  let board: Board = createBoard();
+  let wildcard: WildcardGrid = createWildcardGrid();
+  let current: Piece = randomPiece(false, false);
+  let lastActionWasRotate = false;
+  // score / lines / level / next / combo / freeze / … se añaden en los pasos 5–6.
+
+  // ── Utilidades con estado de partida (port literal de game.js) ─────────────
+  function collide(shape: number[][], ox: number, oy: number): boolean {
+    for (let r = 0; r < shape.length; r++) {
+      for (let c = 0; c < shape[r].length; c++) {
+        if (!shape[r][c]) continue;
+        const nx = ox + c;
+        const ny = oy + r;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+        if (ny >= 0 && board[ny][nx]) return true;
+      }
+    }
+    return false;
+  }
+
+  function tryRotate() {
+    const rotated = rotateCW(current.shape);
+    const kicks = [0, -1, 1, -2, 2];
+    for (const kick of kicks) {
+      if (!collide(rotated, current.x + kick, current.y)) {
+        current.shape = rotated;
+        current.x += kick;
+        lastActionWasRotate = true;
+        return;
+      }
+    }
+  }
+
+  function merge() {
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        if (current.shape[r][c]) board[current.y + r][current.x + c] = current.shape[r][c];
+  }
+
+  function countWildcards(): number {
+    let n = 0;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (wildcard[r][c]) n++;
+    return n;
+  }
+
+  function consumeWildcards(n: number) {
+    let remaining = n;
+    for (let r = 0; r < ROWS && remaining > 0; r++)
+      for (let c = 0; c < COLS && remaining > 0; c++)
+        if (wildcard[r][c]) {
+          wildcard[r][c] = false;
+          remaining--;
+        }
+  }
+
+  function removeRow(r: number) {
+    board.splice(r, 1);
+    board.unshift(new Array<Cell>(COLS).fill(0));
+    wildcard.splice(r, 1);
+    wildcard.unshift(new Array<boolean>(COLS).fill(false));
+  }
+
+  function isFilledOrWall(r: number, c: number): boolean {
+    return r < 0 || r >= ROWS || c < 0 || c >= COLS || !!board[r][c];
+  }
+
+  function detectTSpin(): boolean {
+    if (!current || current.type !== 3 || !lastActionWasRotate) return false;
+    const cx = current.x + 1;
+    const cy = current.y + 1; // centro de la caja 3x3 de la T
+    const corners = [
+      isFilledOrWall(cy - 1, cx - 1),
+      isFilledOrWall(cy - 1, cx + 1),
+      isFilledOrWall(cy + 1, cx - 1),
+      isFilledOrWall(cy + 1, cx + 1),
+    ];
+    return corners.filter(Boolean).length >= 3;
+  }
+
+  function isBoardEmpty(): boolean {
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c]) return false;
+    return true;
+  }
+
+  function ghostY(): number {
+    let gy = current.y;
+    while (!collide(current.shape, current.x, gy + 1)) gy++;
+    return gy;
+  }
+
+  function powerupCenter(): { cx: number; cy: number } {
+    const shape = current.shape;
+    return {
+      cx: current.x + Math.floor(shape[0].length / 2),
+      cy: current.y + Math.floor(shape.length / 2),
+    };
+  }
+
+  function clearCell(r: number, c: number) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+    board[r][c] = 0;
+    wildcard[r][c] = false;
+  }
 
   function initGame() {
-    // Reset completo de la partida; implementación en los pasos 4–6.
+    board = createBoard();
+    wildcard = createWildcardGrid();
+    current = randomPiece(false, false);
+    lastActionWasRotate = false;
+    // El reset completo (score, lines, level, next, spawn, …) se añade en el paso 5.
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────────
