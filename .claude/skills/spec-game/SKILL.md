@@ -93,8 +93,9 @@ least one case — and record:
 - **where the HUD lives**: canvas (`fillText` calls) or the DOM
   (`textContent` / `innerHTML` / `classList` on fixed ids) — this decides the
   `onStats` question;
-- keyboard/mouse listeners and which object they attach to (`window`,
-  `document`, the canvas, DOM buttons);
+- keyboard/mouse/pointer listeners and which object they attach to (`window`,
+  `document`, the canvas, DOM buttons) — the `e.code` values matter, the touch
+  pad reuses them;
 - whether it auto-starts on load;
 - external assets (sprites, audio) and their **relative** paths (these break
   under Next and must be rewritten);
@@ -136,21 +137,28 @@ decisions:
    renders `.hud-stat` blocks)? Default follows Phase 2: canvas-HUD games stay in
    canvas, DOM-HUD games move to `onStats`.
 4. **Controls.** Exact keys → effect. Which keys get `preventDefault` (game keys
-   always; at least `Space` + arrows if used). Mouse or touch? (Touch is
-   out-of-scope by default, consistent with SPEC 05.)
-5. **Assets.** If the game has audio/sprites: which files, copied to
+   always; at least `Space` + arrows if used). Mouse?
+5. **Touch pad (mandatory).** Every game ships an on-screen button pad for mobile
+   (`reference.md` → "Touch controls"). Confirm the button list: for each button
+   its label, the `KeyboardEvent.code` it emits, and `mode` (`hold` for
+   movement/thrust/soft-drop, `tap` for rotate/shoot/hard-drop). Default = mirror
+   the keyboard map 1:1 (arrows → d-pad of `hold`, action keys → `tap`). The
+   engine is **not** modified — the pad dispatches synthetic `keydown`/`keyup` on
+   `window`. Only deviations from the 1:1 default are a `## Decisions` line.
+6. **Assets.** If the game has audio/sprites: which files, copied to
    `public/<slug>/`, paths rewritten to absolute `/<slug>/...`, licence file
    alongside. Follow the "copy only what is used" pattern (`public/sounds/` has 5
    of the pack's 74 samples).
-6. **The original's own state.** Its `localStorage` keys (`snake_hi`,
+7. **The original's own state.** Its `localStorage` keys (`snake_hi`,
    `tetris-skin`, …) are **removed** — the best mark lives in Supabase via
    `submit_score`. Confirm nothing else depends on them.
-7. **Registry.** If this is the first game spec after asteroids, its plan creates
+8. **Registry.** If this is the first game spec after asteroids, its plan creates
    `lib/games/registry.ts` and rewires `app/juego/[id]/jugar/page.tsx` +
    `isPlayable()`. If `lib/games/registry.ts` already exists (check the session
    context / repo), the plan just adds an entry to `GAME_REGISTRY`. State which
    case applies.
-8. **Out of scope.** Confirm the deferrals: real responsive canvas, mobile/touch,
+9. **Out of scope.** Confirm the deferrals: real responsive canvas, haptics/
+   vibration, swipe/gesture input (the touch pad is buttons only),
    `prefers-reduced-motion`, balance changes, new mechanics, realtime leaderboards,
    automated tests.
 
@@ -186,10 +194,12 @@ Content follows this skill's `template.md` (which itself respects `/spec`'s
 - **Scope** — `**In:**` / `**Out of scope (para futuras specs):**`, both
   mandatory. Include the registry bullet only if this spec creates it; the
   migration bullet only if the id is new; the assets bullet only if there are
-  assets.
+  assets. The **touch-pad bullet is always in `**In:**`** (`.touch-controls` in
+  the player component + its CSS block).
 - **Data model** — no new persistence (Supabase `scores` via `submit_score`);
   then the `<X>Options` / `<X>Handle` / `create<X>Game` signatures, the ported
-  internal state, and the component's local state.
+  internal state, the component's local state, and the `TOUCH_CONTROLS` map
+  (`{ label, code, mode }[]`).
 - **Implementation plan** — the pre-structured steps from `template.md`,
   particularized. Drop steps that do not apply (source step for a from-scratch
   game; migration step for a reused id; registry step if the registry exists).

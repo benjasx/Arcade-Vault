@@ -318,7 +318,7 @@ Convenciones (heredadas de SPEC 01 / 05):
 ## Implementation plan
 
 1. **Registro central.** Crear `lib/games/registry.ts` con `GAME_REGISTRY`
-   (`rocas: AsteroidsPlayer`) y `playerFor(id)`. Reescribir
+   (`rocas: AsteroidsPlayer`) y `playerFor(id)`. Reescribir.
    `app/juego/[id]/jugar/page.tsx`: quitar el ternario y el `import` de
    `AsteroidsPlayer`, usar `const Player = playerFor(game.id) ?? GamePlayer;
 return <Player game={game} />`. En `lib/games.ts`, cambiar `isPlayable(id)` a
