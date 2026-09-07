@@ -55,15 +55,20 @@ every choice locked in Phase 3 of the skill. Mirror the style of
   (only if the id is new; skip if reusing a seeded id)
 - **Controlador** `lib/games/<slug>.ts`: port tipado de <fuente> …
 - **Componente** `components/<slug>-player.tsx` (`"use client"`): …
+- **Controles táctiles** en `components/<slug>-player.tsx`: `TOUCH_CONTROLS`
+  (`{ label, code, mode }[]`) + bloque `.touch-controls` que despacha
+  `keydown`/`keyup` sintéticos en `window` (el motor no cambia).
 - **Enrutado** `app/juego/[id]/jugar/page.tsx`: leer del registro …
-- **CSS** `app/globals.css`: `.cover-<slug>` … y escalado del `<canvas>` …
+- **CSS** `app/globals.css`: `.cover-<slug>` … escalado del `<canvas>` … y
+  `.touch-controls` / `.touch-btn` (bajo `@media (pointer: coarse)`).
 - **Assets** `public/<slug>/`: … (only if the game has audio/sprites)
 
 **Out of scope (para futuras specs):**
 
 - Motor real para los otros juegos de `GAMES`.
 - Responsive real del canvas (recalcular `W`/`H` y la física).
-- Sonido/vibración/controles táctiles/móviles, `prefers-reduced-motion`.
+- Vibración/haptics, entrada por gestos o swipe (el pad táctil es solo de
+  botones), `prefers-reduced-motion`.
 - Cambios de balance, mecánicas nuevas o tipos de entidad nuevos.
 - Leaderboards con más columnas o realtime.
 - Tests automatizados (no hay framework configurado).
@@ -100,7 +105,24 @@ function create<X>Game(canvas: HTMLCanvasElement, opts: <X>Options): <X>Handle;
 Then the internal game state ported from the original (entities, score/lives/level,
 state machine, `W`/`H` constants), and the local state of
 `components/<slug>-player.tsx` (`paused`, `over`, `finalScore`, `saved`, `busy`,
-`saveErr`, `pending`).
+`saveErr`, `pending`, plus a `heldRef: Set<string>` for codes con `keydown`
+sintético pendiente de `keyup`).
+
+Touch-pad shape in `components/<slug>-player.tsx` (constante de módulo):
+
+```markdown
+\`\`\`ts
+type TouchMode = "hold" | "tap";
+interface TouchControl {
+label: string; // glifo/etiqueta del botón (◀ ▶ ▲ A …)
+code: string; // KeyboardEvent.code que lee el motor ("ArrowLeft", "Space", "KeyX")
+mode: TouchMode; // "hold" = tecla mantenida; "tap" = un flanco por pulsación
+}
+const TOUCH_CONTROLS: TouchControl[] = [
+/* espejo 1:1 del mapa de teclado */
+];
+\`\`\`
+```
 
 Conventions block (inherited from SPEC 05):
 
@@ -171,14 +193,30 @@ PUNTUACIÓN GUARDADA_`; sin sesión CTA "INICIA SESIÓN PARA GUARDAR" → `/logi
    muestra el canvas real; PAUSA congela; morir abre el modal; guardar con sesión
    añade la marca en `public.scores`.
 
-7. **Escalado y portada CSS.** En `app/globals.css`: bloque `.cover-<slug>`
+7. **Pad táctil.** En `components/<slug>-player.tsx`: `TOUCH_CONTROLS`
+   (`{ label, code, mode }[]`, espejo del mapa de teclado) y un bloque
+   `<div className="touch-controls">` hermano de `.crt`. `press(code)` /
+   `release(code)` = `window.dispatchEvent(new KeyboardEvent("keydown"|"keyup",
+{ code, bubbles: true }))`. Botón: `onPointerDown` → `preventDefault()` +
+   `press`; `mode: "hold"` añade `onPointerUp`/`onPointerCancel`/`onPointerLeave`
+   → `release`; `mode: "tap"` → `release` en el siguiente `requestAnimationFrame`.
+   `heldRef: Set<string>` registra lo mantenido; el cleanup del `useEffect` hace
+   `release` de todo. `<button type="button">`, `onContextMenu` con
+   `preventDefault`. Verificación: en emulación móvil (pointer coarse) el pad se
+   ve y mueve/dispara igual que el teclado; en escritorio no se ve; al desmontar
+   no queda ninguna tecla sintética "pegada".
+
+8. **Escalado y portada CSS.** En `app/globals.css`: bloque `.cover-<slug>`
    (base + `::after` con gradientes + `::before` con glifo unicode) junto a las
    demás portadas (~línea 823); reutilizar `.asteroids-canvas` o renombrarla a
-   `.game-canvas` para el `<canvas>`. Verificación: la portada se ve en `/juegos`;
+   `.game-canvas` para el `<canvas>`; `.touch-controls` (`display:none`; visible
+   solo en `@media (pointer: coarse)`, `touch-action:none`, `user-select:none`) y
+   `.touch-btn` (~64px, glifo `var(--pixel)`, `:active` con borde neón) junto a
+   `.asteroids-canvas` (~línea 1150). Verificación: la portada se ve en `/juegos`;
    el canvas escala sin deformar ni scroll horizontal en los breakpoints
-   existentes.
+   existentes; el pad solo aparece en pointer coarse.
 
-8. **Limpieza.** `npm run lint` y `npm run build` sin errores ni warnings nuevos;
+9. **Limpieza.** `npm run lint` y `npm run build` sin errores ni warnings nuevos;
    consola sin warnings de hidratación en `/juego/<id>/jugar`; al pulsar SALIR no
    quedan listeners `keydown`/`keyup` ni `requestAnimationFrame` activos. Confirmar
    que el bloque regenerado de `AGENTS.md` va junto al commit.
@@ -215,7 +253,13 @@ mechanic-specific ones from Phase 2/3):
 - [ ] `PAUSA` detiene el bucle y cambia a `REANUDAR`; al reanudar no hay salto de
       `dt`.
 - [ ] `SALIR` navega a `/juego/<id>`; tras salir no quedan listeners `keydown`/
-      `keyup` ni `requestAnimationFrame` en marcha.
+      `keyup` ni `requestAnimationFrame` en marcha, ni teclas sintéticas mantenidas.
+- [ ] En un dispositivo táctil (`@media (pointer: coarse)`) aparece el pad
+      `.touch-controls`; cada botón produce el mismo efecto que su tecla
+      (`<lista botón → code → efecto>`); los `hold` mantienen la acción mientras
+      se pulsa y los `tap` disparan un solo flanco.
+- [ ] En escritorio (pointer fino) el pad no se muestra y el layout no cambia;
+      pulsar un botón no roba el foco ni abre el menú contextual de long-press.
 - [ ] El juego aparece en `/juegos`, en la preview de la home y en `/salon`
       (filtro `isPlayable`); el resto de juegos sigue con `GamePlayer` sin cambios.
 - [ ] La portada `.cover-<slug>` se ve en el grid; el `<canvas>` escala sin
@@ -251,6 +295,13 @@ handle`), no reescritura en hooks — mantiene la lógica del original y aísla 
   física.
 - **Sí:** registro central `lib/games/registry.ts` en vez del ternario
   hardcodeado. (Solo en la primera spec de juego.)
+- **Sí:** pad táctil que despacha `KeyboardEvent` sintéticos en `window`, no una
+  API de input nueva en `<X>Handle` — el motor ya escucha `window` por `e.code`,
+  así que el pad no le añade superficie ni un segundo camino de código.
+- **Sí/No:** desviarse del espejo 1:1 teclado→botón para `<botón>` — porque …
+  (solo si alguna tecla no tiene sentido como botón).
+- **Sí:** el pad se muestra por `@media (pointer: coarse)`, no por ancho — una
+  ventana estrecha de escritorio sigue teniendo teclado.
 
 ---
 
@@ -258,14 +309,16 @@ handle`), no reescritura en hooks — mantiene la lógica del original y aísla 
 
 Table, only non-obvious risks. Common ones:
 
-| Riesgo                                                                                       | Mitigación                                                                                                                        |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `requestAnimationFrame` o los listeners sobreviven al desmontar                              | `create<X>Game` guarda el id de rAF y las referencias de los handlers; `destroy()` las limpia. Un criterio lo verifica con SALIR. |
-| TypeScript strict sobre un `game.js` sin tipos                                               | El port tipa entidades como clases/`interface`s; el paso de lógica no cierra hasta que `npm run build` pasa.                      |
-| Assets con rutas relativas hardcodeadas rompen bajo Next                                     | Se copian los usados a `public/<slug>/` y se reescribe el prefijo a `/<slug>/`.                                                   |
-| `<Space>`/flechas hacen scroll o activan un botón enfocado                                   | El listener hace `preventDefault` para las teclas de juego; PAUSA/SALIR no roban el foco.                                         |
-| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render | El `<canvas>` se monta vacío; `create<X>Game` solo toca `window`/DOM dentro de `useEffect`.                                       |
-| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                        | Se commitea junto al trabajo (documentado en `CLAUDE.md` / `AGENTS.md`).                                                          |
+| Riesgo                                                                                                       | Mitigación                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requestAnimationFrame` o los listeners sobreviven al desmontar                                              | `create<X>Game` guarda el id de rAF y las referencias de los handlers; `destroy()` las limpia. Un criterio lo verifica con SALIR.                               |
+| TypeScript strict sobre un `game.js` sin tipos                                                               | El port tipa entidades como clases/`interface`s; el paso de lógica no cierra hasta que `npm run build` pasa.                                                    |
+| Assets con rutas relativas hardcodeadas rompen bajo Next                                                     | Se copian los usados a `public/<slug>/` y se reescribe el prefijo a `/<slug>/`.                                                                                 |
+| `<Space>`/flechas hacen scroll o activan un botón enfocado                                                   | El listener hace `preventDefault` para las teclas de juego; PAUSA/SALIR no roban el foco.                                                                       |
+| Una tecla sintética del pad se queda "pegada" si el `pointerup` se pierde (dedo fuera del botón, desmontaje) | `heldRef: Set<string>` registra cada `keydown` sintético; `onPointerCancel`/`onPointerLeave` y el cleanup del `useEffect` hacen `release` de todo lo pendiente. |
+| El menú contextual de long-press o el zoom por doble-tap interfieren con el pad                              | `onContextMenu` con `preventDefault`, `touch-action:none` y `user-select:none` en `.touch-controls`; botones `type="button"`.                                   |
+| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render                 | El `<canvas>` se monta vacío; `create<X>Game` solo toca `window`/DOM dentro de `useEffect`.                                                                     |
+| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                                        | Se commitea junto al trabajo (documentado en `CLAUDE.md` / `AGENTS.md`).                                                                                        |
 
 ---
 

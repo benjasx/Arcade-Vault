@@ -140,6 +140,60 @@ lives, level })`; the component keeps those in React state and renders them in
   extra `.hud-stat` blocks (see `components/game-player.tsx:` for the exact
   markup of a 4-stat HUD row: Jugador / Puntuación / Vidas / Nivel).
 
+### Touch controls — on-screen buttons for mobile
+
+**Every game player component ships an on-screen control pad.** `rocas` and
+`tetris` predate this rule; from the next game spec on it is part of the base
+shape, added to the `asteroids-player.tsx` copy.
+
+**The engine is not touched.** Both engines already listen for `keydown` /
+`keyup` on `window` and key off `e.code` (`asteroids.ts:132-144`,
+`tetris.ts` input block), with `keys` (held) + `justPressed` (edge) records. The
+pad **synthesizes those same events** — it is purely a component + CSS concern,
+no new engine method, no change to `<X>Handle`.
+
+Fixed shape in `components/<slug>-player.tsx`:
+
+- A module-level `TOUCH_CONTROLS` array, one entry per button:
+  `{ label: string; code: string; mode: "hold" | "tap" }`. `code` is the exact
+  `KeyboardEvent.code` the engine reads (`"ArrowLeft"`, `"Space"`, `"KeyX"`, …).
+  `mode: "hold"` = movement / thrust / soft-drop (key stays down while the finger
+  is down); `mode: "tap"` = rotate / shoot / hard-drop (one edge per press).
+- Default map: mirror the keyboard controls 1:1 — arrows → a d-pad of `hold`
+  buttons, each action key → one `tap` button. A game only deviates when a key
+  makes no sense as a button (rare).
+- Emit helpers on `window`:
+  `press(code)` → `window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }))`;
+  `release(code)` → same with `"keyup"`.
+- Button events: `onPointerDown` → `e.preventDefault()`, `press(code)`; for
+  `mode: "hold"` also `onPointerUp` / `onPointerCancel` / `onPointerLeave` →
+  `release(code)`; for `mode: "tap"`, `release(code)` on the next frame
+  (`requestAnimationFrame`) so the engine's `justPressed` edge is seen once.
+- Track held codes in a `Set<string>` ref; on unmount / SALIR, `release()` every
+  still-held code so a synthetic key never sticks.
+- No focus theft: `<button type="button">`,
+  `onContextMenu={(e) => e.preventDefault()}` (kills the long-press menu). The pad
+  never calls `handleRef.current` directly — one code path (synthetic keys).
+- PAUSA / SALIR stay as real buttons in `.player-hud`; they are **not** in the pad.
+- Placement: a `.touch-controls` block, sibling of `.crt`, inside `.av-player`,
+  **after** the CRT bezel.
+
+### CSS for the pad — add to `app/globals.css`
+
+New classes, next to `.asteroids-canvas` (~line 1150). Not yet in the file — the
+game spec adds them:
+
+- `.touch-controls` — `display: none` by default; shown only inside
+  `@media (pointer: coarse)` as a grid/flex row (d-pad left, actions right),
+  `margin-top: 14px`, `touch-action: none`, `user-select: none`,
+  `-webkit-tap-highlight-color: transparent`. **Gate on `pointer: coarse`, not a
+  width breakpoint** — a narrow desktop window still has a keyboard.
+- `.touch-btn` — square ~64px, `var(--pixel)` glyph, `1px solid var(--line)`,
+  `background: var(--bg-2)`, `:active` swaps to a neon border
+  (`var(--cyan)` / `box-shadow`). Size mods `.wide` / `.tall` for a d-pad.
+- Reuse palette vars only (`--cyan`, `--magenta`, `--yellow`, `--line`, `--bg-2`,
+  `--ink`). No new colours, no `<img>`.
+
 ---
 
 ## Central registry — `lib/games/registry.ts` (created by the first game spec)
@@ -267,6 +321,12 @@ game, to be decided in the spec:
 - reuse `.asteroids-canvas` as-is (fine for any 4:3-ish canvas);
 - rename it to `.game-canvas` — a 2-site edit (`globals.css:1091` and
   `asteroids-player.tsx:123`) plus using the new name in the new component.
+
+### Touch-pad classes
+
+`.touch-controls` / `.touch-btn` — see **Touch controls** under the player
+contract above. Gated on `@media (pointer: coarse)`, `display: none` otherwise.
+Not in `globals.css` yet; each game spec adds the block near `.asteroids-canvas`.
 
 ---
 
