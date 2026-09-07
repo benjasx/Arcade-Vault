@@ -435,14 +435,34 @@ export function createBloqueBusterGame(
   let now = 0;
   let lastTime: number | null = null;
   let rafId: number | null = null;
+  let destroyed = false; // evita que el callback de `loadSpritesheet` reviva el loop
   // Garantiza una única llamada a `opts.onGameOver` por partida.
   let gameOverNotified = false;
 
   // ── Audio ──────────────────────────────────────────────────────────────────
-  // Placeholders; el paso 5 los sustituye por pools de <audio> sobre
-  // `/bloque-buster/...`.
-  const playBreakSfx = () => {};
-  const playBounceSfx = () => {};
+  // Los dos .mp3 originales (Kenney CC0) servidos desde `/bloque-buster/`. Cada
+  // efecto usa un pool de <audio> para poder solaparse sin cortes.
+  const makeSfx = (src: string, poolSize: number, volume: number) => {
+    const pool = Array.from({ length: poolSize }, () => {
+      const a = new Audio(src);
+      a.volume = volume;
+      a.preload = "auto";
+      return a;
+    });
+    let i = 0;
+    return () => {
+      const a = pool[i++ % pool.length];
+      try {
+        a.currentTime = 0;
+        void a.play().catch(() => {});
+      } catch {
+        /* ignora fallos de reproducción (autoplay, etc.) */
+      }
+    };
+  };
+
+  const playBreakSfx = makeSfx(BREAK_SFX_SRC, BREAK_SFX_POOL_SIZE, 0.35); // rotura de bloque
+  const playBounceSfx = makeSfx(BOUNCE_SFX_SRC, BOUNCE_SFX_POOL_SIZE, 0.3); // rebote pared/paddle
 
   // ── Estado de la partida (a nivel de módulo en el original, ahora en cierre) ─
   const state: GameState = {
@@ -803,27 +823,135 @@ export function createBloqueBusterGame(
     }
   }
 
-  // ── Render provisional (el paso 5 lo sustituye por `render()` con sprites) ───
-  function renderDebug() {
+  // ── Render (port de `render()` de `game.js`) ────────────────────────────────
+  function render() {
     ctx.fillStyle = BG_COLOR;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    for (const br of state.bricks) {
-      if (!br.alive) continue;
-      ctx.fillStyle = br.color;
-      ctx.fillRect(br.x, br.y, br.w, br.h);
+
+    for (let i = 0; i < state.bricks.length; i++) {
+      const br = state.bricks[i];
+      if (br.alive) {
+        drawSprite(ctx, "block_" + (br.skin || br.color), br.x, br.y, br.w, br.h);
+        if (br.hp < br.maxHp) {
+          const crackFrames = EXPLOSION_FRAMES[br.color];
+          const idx = clamp(br.maxHp - br.hp - 1, 0, crackFrames.length - 1);
+          drawFrame(ctx, crackFrames[idx], br.x, br.y, br.w, br.h);
+        }
+      } else if (br.breaking) {
+        const elapsed = now - br.breakStart;
+        if (elapsed >= EXPLOSION_DURATION) {
+          br.breaking = false;
+        } else {
+          const frames = EXPLOSION_FRAMES[br.color];
+          const idx = clamp(
+            Math.floor((elapsed / EXPLOSION_DURATION) * frames.length),
+            0,
+            frames.length - 1,
+          );
+          drawFrame(ctx, frames[idx], br.x, br.y, br.w, br.h);
+        }
+      }
     }
+
+    for (let i = 0; i < state.particles.length; i++) {
+      const pt = state.particles[i];
+      ctx.globalAlpha = clamp(1 - (now - pt.born) / PARTICLE_LIFE, 0, 1);
+      ctx.fillStyle = pt.color;
+      ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
+    }
+    ctx.globalAlpha = 1;
+
+    for (let i = state.flashes.length - 1; i >= 0; i--) {
+      const fl = state.flashes[i];
+      const age = now - fl.born;
+      if (age >= FLASH_DURATION) {
+        state.flashes.splice(i, 1);
+        continue;
+      }
+      ctx.globalAlpha = 1 - age / FLASH_DURATION;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(fl.x, fl.y, fl.w, fl.h);
+    }
+    ctx.globalAlpha = 1;
+
     ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < state.popups.length; i++) {
+      const pop = state.popups[i];
+      const life = pop.life || POPUP_LIFE;
+      const age = now - pop.born;
+      ctx.font = (pop.size || 18) + "px monospace";
+      ctx.globalAlpha = 1 - age / life;
+      ctx.fillText(pop.text, pop.x, pop.y - POPUP_RISE * (age / life));
+    }
+    ctx.globalAlpha = 1;
+
     const p = state.paddle;
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    for (const b of state.balls) ctx.fillRect(b.x - b.r, b.y - b.r, BALL.size, BALL.size);
-    ctx.font = "16px monospace";
+    drawSprite(ctx, "paddle", p.x, p.y, p.w, p.h);
+
+    for (let i = 0; i < state.balls.length; i++) {
+      const b = state.balls[i];
+      drawSprite(ctx, "ball", b.x - b.r, b.y - b.r, BALL.size, BALL.size);
+    }
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "20px monospace";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(
-      `Vidas ${state.lives}  Nivel ${state.stage}  Score ${state.score}  [${state.phase}]`,
-      12,
-      12,
-    );
+    const livesLabel = "Vidas: ";
+    ctx.fillText(livesLabel, 12, 12);
+
+    const lifeIcon = 16;
+    const lifeGap = 6;
+    const lifeIconX = 12 + ctx.measureText(livesLabel).width;
+    for (let i = 0; i < state.lives; i++) {
+      drawSprite(ctx, "ball", lifeIconX + i * (lifeIcon + lifeGap), 12, lifeIcon, lifeIcon);
+    }
+
+    ctx.textAlign = "center";
+    ctx.fillText("Nivel: " + state.stage, CANVAS_W / 2, 12);
+
+    ctx.textAlign = "right";
+    ctx.fillText("Score: " + state.score, CANVAS_W - 12, 12);
+
+    if (state.buff) {
+      const remain = clamp((state.buff.until - now) / BUFF_DURATION, 0, 1);
+      const label = state.buff.kind === "slow" ? "SLOW BALL" : "FAST BALL";
+      const col = state.buff.kind === "slow" ? "#44aadd" : "#ee5555";
+      const chipX = 12;
+      const chipY = 40;
+      const barX = chipX + 84;
+      const barW = 80;
+      const barH = 12;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = "13px monospace";
+      ctx.fillStyle = col;
+      ctx.fillText(label, chipX, chipY + barH / 2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, chipY, barW, barH);
+      ctx.fillRect(barX, chipY, barW * remain, barH);
+    }
+
+    if (state.phase !== "playing") {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "48px monospace";
+      if (state.phase === "stageclear") {
+        ctx.fillText("Nivel " + (state.stage + 1), CANVAS_W / 2, CANVAS_H / 2 - 20);
+        ctx.font = "20px monospace";
+        ctx.fillText("Pulsa una tecla o haz click para continuar", CANVAS_W / 2, CANVAS_H / 2 + 30);
+      } else {
+        // Cambio respecto al original: sin la línea "Pulsa ... para reiniciar".
+        ctx.fillText("Game Over", CANVAS_W / 2, CANVAS_H / 2 - 20);
+      }
+    }
   }
 
   // ── Input ──────────────────────────────────────────────────────────────────
@@ -860,18 +988,18 @@ export function createBloqueBusterGame(
   canvas.addEventListener("mousemove", onMouseMove);
   canvas.addEventListener("click", onClick);
 
-  // ── Loop ───────────────────────────────────────────────────────────────────
+  // ── Loop y ciclo de vida ───────────────────────────────────────────────────
   const loop = (ts: number) => {
     const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
     lastTime = ts;
     now += dt * 1000;
     update(dt);
-    renderDebug(); // paso 5: render()
+    render();
     rafId = requestAnimationFrame(loop);
   };
 
   const startLoop = () => {
-    if (rafId !== null) return;
+    if (rafId !== null || destroyed) return;
     lastTime = null; // evita un salto de `dt` al reanudar
     rafId = requestAnimationFrame(loop);
   };
@@ -882,7 +1010,12 @@ export function createBloqueBusterGame(
     rafId = null;
   };
 
-  startLoop();
+  // Arranca el bucle solo cuando el spritesheet está listo (como el original).
+  loadSpritesheet(() => {
+    if (destroyed) return;
+    render();
+    startLoop();
+  });
 
   return {
     pause: stopLoop,
@@ -892,6 +1025,7 @@ export function createBloqueBusterGame(
       startLoop();
     },
     destroy: () => {
+      destroyed = true;
       stopLoop();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
