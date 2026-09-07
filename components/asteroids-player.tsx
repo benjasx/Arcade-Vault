@@ -7,6 +7,25 @@ import { createAsteroidsGame, type AsteroidsHandle } from "@/lib/games/asteroids
 import { registerPlay, submitScore } from "@/lib/leaderboard";
 import type { Game } from "@/lib/games";
 
+type TouchMode = "hold" | "tap";
+
+interface TouchControl {
+  label: string; // glifo/etiqueta del botón
+  code: string; // KeyboardEvent.code que lee el motor
+  mode: TouchMode; // "hold" = tecla mantenida; "tap" = un flanco por pulsación
+}
+
+// Espejo 1:1 del teclado: el pad solo despacha KeyboardEvent sintéticos en
+// `window` y el motor ya escucha `window` por `e.code`. El motor lee giro y
+// propulsión de forma continua (`keys[]`), así que van en "hold"; el disparo
+// consume un flanco (`pressed("Space")`), así que va en "tap".
+const TOUCH_CONTROLS: TouchControl[] = [
+  { label: "◀", code: "ArrowLeft", mode: "hold" },
+  { label: "▲", code: "ArrowUp", mode: "hold" },
+  { label: "▶", code: "ArrowRight", mode: "hold" },
+  { label: "DISPARO", code: "Space", mode: "tap" },
+];
+
 /**
  * Reproductor del juego real de asteroides (solo para la entrada `rocas`).
  * Monta el controlador imperativo `createAsteroidsGame` dentro del marco CRT de
@@ -19,6 +38,8 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<AsteroidsHandle | null>(null);
+  // `code`s con un keydown sintético pendiente de su keyup (pad táctil).
+  const heldRef = useRef<Set<string>>(new Set());
 
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
@@ -39,11 +60,27 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
       },
     });
     handleRef.current = h;
+    const held = heldRef.current;
     return () => {
       h.destroy();
       handleRef.current = null;
+      // Suelta cualquier tecla sintética del pad que quedara sin keyup.
+      held.forEach((code) =>
+        window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true })),
+      );
+      held.clear();
     };
   }, [game.id]);
+
+  // ── Pad táctil: keydown / keyup sintéticos en `window`; el motor no se toca ──
+  const press = (code: string) => {
+    heldRef.current.add(code);
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+  };
+  const release = (code: string) => {
+    if (!heldRef.current.delete(code)) return;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true }));
+  };
 
   const togglePause = () => {
     const h = handleRef.current;
@@ -147,6 +184,35 @@ export function AsteroidsPlayer({ game }: { game: Game }) {
           <span>{game.title} · CRT-83 · 60 HZ</span>
           <span>CARGA · 1MB</span>
         </div>
+      </div>
+
+      <div className="touch-controls">
+        {TOUCH_CONTROLS.map((tc) => {
+          const holdHandlers =
+            tc.mode === "hold"
+              ? {
+                  onPointerUp: () => release(tc.code),
+                  onPointerCancel: () => release(tc.code),
+                  onPointerLeave: () => release(tc.code),
+                }
+              : null;
+          return (
+            <button
+              key={tc.code}
+              type="button"
+              className="touch-btn"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                press(tc.code);
+                if (tc.mode === "tap") requestAnimationFrame(() => release(tc.code));
+              }}
+              {...holdHandlers}
+            >
+              {tc.label}
+            </button>
+          );
+        })}
       </div>
 
       {over && (

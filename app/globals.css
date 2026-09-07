@@ -1148,9 +1148,9 @@ a {
   object-fit: contain;
 }
 
-/* Pad táctil de BLOQUE BUSTER: oculto salvo en punteros gruesos. El d-pad va a
-   la izquierda y la acción a la derecha. Solo variables de la paleta; sin
-   colores ni <img> nuevos. */
+/* Pad táctil de los reproductores (BLOQUE BUSTER, TETRABYTE, asteroides): oculto
+   salvo en punteros gruesos. El d-pad va a la izquierda y la acción a la
+   derecha. Solo variables de la paleta; sin colores ni <img> nuevos. */
 .touch-controls {
   display: none;
 }
