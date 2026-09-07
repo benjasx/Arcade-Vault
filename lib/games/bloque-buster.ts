@@ -83,7 +83,7 @@ const STAGE_SPEED_STEP = 0.05; // +5% de rapidez de bola por stage
 const STAGE_SPEED_CAP = 1.75; // multiplicador máximo sobre BALL.speed
 
 const MULTIBALL_EVERY = 30; // bloques realmente rotos entre hitos de bloque
-const MULTIBALL_ADD = 4; // bolas que se añaden en cada activación
+const MULTIBALL_ADD: number = 4; // bolas que se añaden en cada activación
 const MULTIBALL_SPREAD = 0.5; // rad de abanico al repartir la dirección de las bolas nuevas
 const MAX_LAUNCH_ANGLE = (50 * Math.PI) / 180; // desde la vertical
 const MAX_BOUNCE_ANGLE = (60 * Math.PI) / 180; // rebote en el paddle, desde la vertical
@@ -286,6 +286,51 @@ const EXPLOSION_FRAMES: Record<string, SpriteFrame[]> = {
 
 const EXPLOSION_DURATION = 150;
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  born: number;
+}
+
+interface Flash {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  born: number;
+}
+
+interface Popup {
+  x: number;
+  y: number;
+  text: string;
+  born: number;
+  life?: number;
+  size?: number;
+}
+
+interface GameState {
+  phase: Phase;
+  stage: number;
+  stageSpeed: number; // rapidez base de la bola en el stage actual (sin buff)
+  buff: Buff | null;
+  lives: number;
+  score: number;
+  bricksDestroyed: number; // bloques con hp === 0 en toda la partida
+  blockMilestones: number; // hitos de MULTIBALL_EVERY cruzados (alterna multibola / buff)
+  paddle: { x: number; y: number; w: number; h: number };
+  balls: Ball[];
+  bricks: Brick[];
+  input: { left: boolean; right: boolean; mouseX: number | null };
+  particles: Particle[];
+  flashes: Flash[];
+  popups: Popup[];
+}
+
 const SPRITES: {
   paddle: SpriteFrame;
   ball: SpriteFrame;
@@ -383,25 +428,431 @@ export function createBloqueBusterGame(
   ctx.fillStyle = BG_COLOR;
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // ── Input ──────────────────────────────────────────────────────────────────
-  // El objeto `input` se convierte en parte de `state` en el paso 4.
-  const input = { left: false, right: false, mouseX: null as number | null };
+  // ── Tiempo de juego ────────────────────────────────────────────────────────
+  // `now` es un acumulador de tiempo de juego (ms), no el timestamp de rAF: no
+  // avanza mientras el loop no se programa, así `pause()` congela buff,
+  // partículas, destellos, popups y animación de rotura sin reajustar timestamps.
+  let now = 0;
+  let lastTime: number | null = null;
+  let rafId: number | null = null;
+  // Garantiza una única llamada a `opts.onGameOver` por partida.
+  let gameOverNotified = false;
 
+  // ── Audio ──────────────────────────────────────────────────────────────────
+  // Placeholders; el paso 5 los sustituye por pools de <audio> sobre
+  // `/bloque-buster/...`.
+  const playBreakSfx = () => {};
+  const playBounceSfx = () => {};
+
+  // ── Estado de la partida (a nivel de módulo en el original, ahora en cierre) ─
+  const state: GameState = {
+    phase: "playing",
+    stage: 1,
+    stageSpeed: BALL.speed,
+    buff: null,
+    lives: START_LIVES,
+    score: 0,
+    bricksDestroyed: 0,
+    blockMilestones: 0,
+    paddle: { x: (CANVAS_W - PADDLE.w) / 2, y: PADDLE.y, w: PADDLE.w, h: PADDLE.h },
+    balls: [makeBall()],
+    bricks: buildBricks(1),
+    input: { left: false, right: false, mouseX: null },
+    particles: [],
+    flashes: [],
+    popups: [],
+  };
+
+  // ── Lógica portada de `game.js` (sin cambios de semántica salvo lo indicado) ─
+  function updatePaddle(dt: number) {
+    const p = state.paddle;
+    const maxX = CANVAS_W - p.w;
+
+    if (state.input.mouseX !== null) {
+      p.x = state.input.mouseX - p.w / 2;
+    }
+
+    let dir = 0;
+    if (state.input.left) dir -= 1;
+    if (state.input.right) dir += 1;
+    if (dir !== 0) {
+      p.x += dir * PADDLE.speed * dt;
+      state.input.mouseX = null; // el teclado toma el control hasta que se mueve el ratón
+    }
+
+    p.x = clamp(p.x, 0, maxX);
+  }
+
+  function stickBallToPaddle(ball: Ball) {
+    const p = state.paddle;
+    ball.x = p.x + p.w / 2;
+    ball.y = p.y - ball.r;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.stuck = true;
+  }
+
+  function stageBallSpeed(): number {
+    return BALL.speed * Math.min(1 + STAGE_SPEED_STEP * (state.stage - 1), STAGE_SPEED_CAP);
+  }
+
+  function effectiveSpeed(): number {
+    return state.stageSpeed * (state.buff ? state.buff.mult : 1);
+  }
+
+  function rescaleBalls() {
+    const target = effectiveSpeed();
+    for (let i = 0; i < state.balls.length; i++) {
+      const b = state.balls[i];
+      if (b.stuck) continue;
+      const mag = Math.hypot(b.vx, b.vy);
+      if (mag === 0) continue;
+      b.vx = (b.vx / mag) * target;
+      b.vy = (b.vy / mag) * target;
+    }
+  }
+
+  function activateBuff() {
+    const slow = Math.random() < 0.5;
+    state.buff = {
+      kind: slow ? "slow" : "fast",
+      mult: slow ? BUFF_SLOW : BUFF_FAST,
+      until: now + BUFF_DURATION,
+    };
+    rescaleBalls();
+    spawnNotice(slow ? "SLOW BALL" : "FAST BALL");
+  }
+
+  function launchBall() {
+    const speed = effectiveSpeed();
+    for (let i = 0; i < state.balls.length; i++) {
+      const b = state.balls[i];
+      if (!b.stuck) continue;
+      b.stuck = false;
+      const angle = (Math.random() * 2 - 1) * MAX_LAUNCH_ANGLE;
+      b.vx = speed * Math.sin(angle);
+      b.vy = -speed * Math.cos(angle);
+    }
+  }
+
+  function collideBallWall(b: Ball) {
+    if (b.x - b.r < 0) {
+      b.x = b.r;
+      b.vx = -b.vx;
+      playBounceSfx();
+    } else if (b.x + b.r > CANVAS_W) {
+      b.x = CANVAS_W - b.r;
+      b.vx = -b.vx;
+      playBounceSfx();
+    }
+
+    if (b.y - b.r < 0) {
+      b.y = b.r;
+      b.vy = -b.vy;
+      playBounceSfx();
+    }
+  }
+
+  function collideBallPaddle(b: Ball) {
+    const p = state.paddle;
+    if (b.vy <= 0) return;
+    if (b.x + b.r <= p.x || b.x - b.r >= p.x + p.w) return;
+    if (b.y + b.r < p.y || b.y - b.r > p.y + p.h) return;
+
+    const offset = clamp((b.x - (p.x + p.w / 2)) / (p.w / 2), -1, 1);
+    const angle = offset * MAX_BOUNCE_ANGLE;
+    const speed = effectiveSpeed();
+    b.vx = speed * Math.sin(angle);
+    b.vy = -speed * Math.cos(angle);
+    b.y = p.y - b.r;
+    playBounceSfx();
+  }
+
+  function collideBallBricks(b: Ball) {
+    const left = b.x - b.r;
+    const right = b.x + b.r;
+    const top = b.y - b.r;
+    const bottom = b.y + b.r;
+
+    for (let i = 0; i < state.bricks.length; i++) {
+      const br = state.bricks[i];
+      if (!br.alive) continue;
+      if (right <= br.x || left >= br.x + br.w || bottom <= br.y || top >= br.y + br.h) continue;
+
+      const overlapX = Math.min(right - br.x, br.x + br.w - left);
+      const overlapY = Math.min(bottom - br.y, br.y + br.h - top);
+
+      if (overlapX < overlapY) {
+        b.x += b.x < br.x + br.w / 2 ? -overlapX : overlapX;
+        b.vx = -b.vx;
+      } else {
+        b.y += b.y < br.y + br.h / 2 ? -overlapY : overlapY;
+        b.vy = -b.vy;
+      }
+
+      br.hp--;
+      if (br.hp > 0) {
+        br.breaking = false;
+        playBreakSfx();
+        spawnFlash(br);
+        return; // golpe no letal: solo sonido + destello
+      }
+
+      br.alive = false;
+      br.breaking = true;
+      br.breakStart = now;
+      playBreakSfx();
+      spawnParticles(br);
+      spawnFlash(br);
+      const points = 10 * br.maxHp;
+      spawnPopup(br, points);
+      const scoreBefore = state.score;
+      state.score += points;
+      state.bricksDestroyed++;
+
+      if (
+        Math.floor((state.bricksDestroyed - 1) / MULTIBALL_EVERY) !==
+        Math.floor(state.bricksDestroyed / MULTIBALL_EVERY)
+      ) {
+        state.blockMilestones++;
+        if (state.blockMilestones % 2 === 1) {
+          spawnMultiball(b);
+          spawnNotice("MULTIBALL!");
+        } else {
+          activateBuff();
+        }
+      }
+
+      if (Math.floor(scoreBefore / LIFE_EVERY) !== Math.floor(state.score / LIFE_EVERY)) {
+        if (state.lives < MAX_LIVES) {
+          state.lives++;
+          spawnNotice("+1 VIDA");
+        } else {
+          spawnNotice("VIDAS AL MAXIMO");
+        }
+      }
+
+      return; // resolver como máximo un bloque por frame
+    }
+  }
+
+  function updateBalls(dt: number) {
+    const count = state.balls.length; // bolas de multibola nacen dentro; se mueven el frame siguiente
+    for (let i = 0; i < count; i++) {
+      const b = state.balls[i];
+
+      if (b.stuck) {
+        stickBallToPaddle(b);
+        continue;
+      }
+
+      const dist = Math.hypot(b.vx, b.vy) * dt;
+      const steps = Math.max(1, Math.ceil(dist / b.r));
+      const sdt = dt / steps;
+      for (let s = 0; s < steps; s++) {
+        b.x += b.vx * sdt;
+        b.y += b.vy * sdt;
+        collideBallWall(b);
+        collideBallPaddle(b);
+        collideBallBricks(b);
+      }
+    }
+  }
+
+  function loseBallsOffscreen() {
+    for (let i = state.balls.length - 1; i >= 0; i--) {
+      if (state.balls[i].y - state.balls[i].r > CANVAS_H) {
+        state.balls.splice(i, 1);
+      }
+    }
+    if (state.balls.length > 0) return;
+
+    state.lives--;
+    if (state.lives > 0) {
+      state.balls.push(makeBall());
+      stickBallToPaddle(state.balls[0]);
+    }
+  }
+
+  function spawnMultiball(ref: Ball) {
+    if (!ref) return;
+    const speed = effectiveSpeed();
+    const baseAngle = Math.atan2(ref.vy, ref.vx);
+    for (let i = 0; i < MULTIBALL_ADD; i++) {
+      const t = MULTIBALL_ADD === 1 ? 0 : (i / (MULTIBALL_ADD - 1)) * 2 - 1; // [ -1, 1 ]
+      const angle = baseAngle + t * MULTIBALL_SPREAD;
+      state.balls.push({
+        x: ref.x,
+        y: ref.y,
+        vx: speed * Math.cos(angle),
+        vy: speed * Math.sin(angle),
+        r: BALL.size / 2,
+        stuck: false,
+      });
+    }
+  }
+
+  function spawnParticles(br: Brick) {
+    if (state.particles.length >= PARTICLE_MAX) return;
+    const cx = br.x + br.w / 2;
+    const cy = br.y + br.h / 2;
+    for (let i = 0; i < PARTICLES_PER_BRICK; i++) {
+      state.particles.push({
+        x: cx,
+        y: cy,
+        vx: (Math.random() * 2 - 1) * PARTICLE_VX_MAX,
+        vy: PARTICLE_VY_MIN + Math.random() * (PARTICLE_VY_MAX - PARTICLE_VY_MIN),
+        size: PARTICLE_SIZE_MIN + Math.random() * (PARTICLE_SIZE_MAX - PARTICLE_SIZE_MIN),
+        color: br.color,
+        born: now,
+      });
+    }
+  }
+
+  function updateParticles(dt: number) {
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      if (now - p.born >= PARTICLE_LIFE) {
+        state.particles.splice(i, 1);
+        continue;
+      }
+      p.vy += PARTICLE_GRAVITY * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  function spawnFlash(br: Brick) {
+    state.flashes.push({ x: br.x, y: br.y, w: br.w, h: br.h, born: now });
+  }
+
+  function spawnPopup(br: Brick, points: number) {
+    state.popups.push({ x: br.x + br.w / 2, y: br.y + br.h / 2, text: "+" + points, born: now });
+  }
+
+  function spawnNotice(text: string) {
+    state.popups.push({
+      x: CANVAS_W / 2,
+      y: CANVAS_H / 2 - 80,
+      text,
+      born: now,
+      life: 1000,
+      size: 34,
+    });
+  }
+
+  function updatePopups() {
+    for (let i = state.popups.length - 1; i >= 0; i--) {
+      const life = state.popups[i].life || POPUP_LIFE;
+      if (now - state.popups[i].born >= life) state.popups.splice(i, 1);
+    }
+  }
+
+  function advanceStage() {
+    state.stage++;
+    state.bricks = buildBricks(state.stage);
+    state.stageSpeed = stageBallSpeed();
+    state.buff = null;
+    state.balls = [makeBall()];
+    state.phase = "playing";
+    stickBallToPaddle(state.balls[0]);
+  }
+
+  function resetGame() {
+    state.phase = "playing";
+    state.stage = 1;
+    state.stageSpeed = BALL.speed;
+    state.buff = null;
+    state.lives = START_LIVES;
+    state.score = 0;
+    state.bricksDestroyed = 0;
+    state.blockMilestones = 0;
+    state.balls = [makeBall()];
+    state.bricks = buildBricks(state.stage);
+    state.particles.length = 0;
+    state.popups.length = 0;
+    state.flashes.length = 0;
+    state.paddle.x = (CANVAS_W - PADDLE.w) / 2;
+    gameOverNotified = false; // nuevo: se rearma el aviso de game over
+    stickBallToPaddle(state.balls[0]);
+  }
+
+  function update(dt: number) {
+    if (state.phase !== "playing") return;
+
+    if (state.buff && now >= state.buff.until) {
+      state.buff = null;
+      rescaleBalls();
+    }
+
+    updatePaddle(dt);
+    updateBalls(dt);
+    loseBallsOffscreen();
+    updateParticles(dt);
+    updatePopups();
+
+    if (state.lives <= 0) {
+      state.phase = "gameover";
+      // Cambio respecto al original: la plataforma es la dueña del reinicio.
+      if (!gameOverNotified) {
+        gameOverNotified = true;
+        opts.onGameOver(state.score);
+      }
+    } else if (!state.bricks.some((br) => br.alive)) {
+      state.phase = "stageclear";
+    }
+  }
+
+  // ── Render provisional (el paso 5 lo sustituye por `render()` con sprites) ───
+  function renderDebug() {
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    for (const br of state.bricks) {
+      if (!br.alive) continue;
+      ctx.fillStyle = br.color;
+      ctx.fillRect(br.x, br.y, br.w, br.h);
+    }
+    ctx.fillStyle = "#fff";
+    const p = state.paddle;
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    for (const b of state.balls) ctx.fillRect(b.x - b.r, b.y - b.r, BALL.size, BALL.size);
+    ctx.font = "16px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(
+      `Vidas ${state.lives}  Nivel ${state.stage}  Score ${state.score}  [${state.phase}]`,
+      12,
+      12,
+    );
+  }
+
+  // ── Input ──────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
     if (PREVENT_DEFAULT_KEYS.includes(e.code)) e.preventDefault();
-    if (e.code === "ArrowLeft") input.left = true;
-    if (e.code === "ArrowRight") input.right = true;
+    if (state.phase === "stageclear") {
+      advanceStage();
+      return;
+    }
+    if (state.phase === "gameover") return; // sin reinicio por tecla: lo hace el modal
+    if (e.code === "ArrowLeft") state.input.left = true;
+    if (e.code === "ArrowRight") state.input.right = true;
+    if (e.code === "Space") launchBall();
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    if (e.code === "ArrowLeft") input.left = false;
-    if (e.code === "ArrowRight") input.right = false;
+    if (e.code === "ArrowLeft") state.input.left = false;
+    if (e.code === "ArrowRight") state.input.right = false;
   };
   const onMouseMove = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
-    input.mouseX = (e.clientX - rect.left) * (CANVAS_W / rect.width);
+    state.input.mouseX = (e.clientX - rect.left) * (CANVAS_W / rect.width);
   };
   const onClick = () => {
-    /* paso 4: launchBall / advanceStage */
+    if (state.phase === "stageclear") {
+      advanceStage();
+      return;
+    }
+    if (state.phase === "gameover") return; // sin reinicio por click
+    launchBall();
   };
 
   window.addEventListener("keydown", onKeyDown);
@@ -410,20 +861,18 @@ export function createBloqueBusterGame(
   canvas.addEventListener("click", onClick);
 
   // ── Loop ───────────────────────────────────────────────────────────────────
-  // El paso 4 añade `lastTime` y `now` (acumulador de tiempo de juego,
-  // `now += min(dt, 0.05) * 1000`, no el timestamp de rAF) para que `pause()`
-  // congele buff, partículas, destellos, popups y animación de rotura.
-  let rafId: number | null = null;
-
-  const loop = () => {
-    ctx.fillStyle = BG_COLOR;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    // paso 4: update(dt) · paso 5: render()
+  const loop = (ts: number) => {
+    const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
+    lastTime = ts;
+    now += dt * 1000;
+    update(dt);
+    renderDebug(); // paso 5: render()
     rafId = requestAnimationFrame(loop);
   };
 
   const startLoop = () => {
     if (rafId !== null) return;
+    lastTime = null; // evita un salto de `dt` al reanudar
     rafId = requestAnimationFrame(loop);
   };
 
@@ -439,7 +888,7 @@ export function createBloqueBusterGame(
     pause: stopLoop,
     resume: startLoop,
     restart: () => {
-      // paso 4: resetGame()
+      resetGame();
       startLoop();
     },
     destroy: () => {
