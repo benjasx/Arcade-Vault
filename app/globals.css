@@ -1033,6 +1033,29 @@ a {
 .hud-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+/* selector de skin del tablero (TETRABYTE) */
+.hud-select {
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: 0;
+}
+.hud-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.3);
+}
+.hud-select:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .crt {
@@ -1125,43 +1148,48 @@ a {
   object-fit: contain;
 }
 
-/* TETRABYTE: el tablero es 1:2 (no 4:3), así que la pantalla CRT deja de forzar
-   aspect-ratio y se limita la altura; tablero + preview NEXT en una fila
-   centrada, escalados por CSS. No se reusa `.asteroids-canvas`. */
+/* TETRABYTE: el tablero es 15×20 → 450×600 (3:4), no el 4:3 del CRT, así que la
+   pantalla deja de forzar aspect-ratio y se limita la altura. Grid `1fr auto 1fr`:
+   el tablero ocupa la columna central (queda centrado geométricamente pase lo que
+   pase con la preview) y el NEXT se pega a su borde derecho. No se reusa
+   `.asteroids-canvas`. */
 .crt-screen.tetris {
   aspect-ratio: auto;
-  height: clamp(360px, 68vh, 640px);
+  height: clamp(380px, 72vh, 660px);
 }
 .tetris-stage {
   position: absolute;
   inset: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: clamp(10px, 3vw, 28px);
 }
 .tetris-board {
+  grid-column: 2;
   display: block;
-  height: 94%;
+  height: 92%;
   width: auto;
-  aspect-ratio: 1 / 2;
+  aspect-ratio: 3 / 4;
   image-rendering: pixelated;
 }
 .tetris-next {
+  grid-column: 3;
+  justify-self: start;
+  align-self: start;
+  margin: 8% 0 0 clamp(10px, 2vw, 22px);
   display: block;
-  width: clamp(52px, 8vw, 88px);
+  width: clamp(48px, 7vw, 84px);
   height: auto;
   aspect-ratio: 1 / 1;
-  align-self: flex-start;
-  margin-top: 6%;
   image-rendering: pixelated;
 }
 @media (max-width: 720px) {
   .crt-screen.tetris {
-    height: clamp(320px, 58vh, 520px);
+    height: clamp(340px, 60vh, 520px);
   }
   .tetris-next {
-    width: 44px;
+    width: 40px;
+    margin-left: 8px;
   }
 }
 

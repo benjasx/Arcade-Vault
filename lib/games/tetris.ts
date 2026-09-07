@@ -9,8 +9,12 @@
 // juego —a nivel de módulo en el original— vive en el cierre de la factory.
 //
 // Diferencias respecto al original:
-//   - Sin skins, sin toggle de tema claro/oscuro, sin selector de nivel inicial
-//     (`startLevel` fijo a 1). El marco CRT de la plataforma es la estética.
+//   - Se conservan los 4 skins (`SKINS`, seleccionables vía `setSkin`), pero sin
+//     el toggle de tema claro/oscuro ni el selector de nivel inicial de game.js
+//     (`startLevel` fijo a 1). El marco CRT de la plataforma es la estética base.
+//   - Tablero de 15 columnas (game.js usa 10); `ROWS` sigue en 20.
+//   - Audio: samples de Kenney "Impact Sounds" (CC0) en pools de <audio>, en vez
+//     del WebAudio sintetizado del original.
 //   - Sin reinicio propio (botón Reiniciar, pantalla de inicio, tabla de
 //     highscores en el DOM): el modal de la plataforma es dueño del reinicio.
 //   - Sin pausa interna con `P` / `Esc`: solo el botón PAUSA de la plataforma.
@@ -43,15 +47,21 @@ export interface TetrisHandle {
   resume: () => void;
   /** Reinicia la partida (`initGame`) y reanuda el loop. */
   restart: () => void;
-  /** Cancela el rAF pendiente, quita el listener de teclado y cierra el AudioContext. */
+  /** Cambia el skin visual del canvas (paleta / fondo / grid / dibujo de bloque); no toca el estado de partida. */
+  setSkin: (skin: SkinName) => void;
+  /** Cancela el rAF pendiente y quita el listener de teclado. */
   destroy: () => void;
 }
 
+/** Skins visuales portados de `game.js` (`SKINS`). */
+export type SkinName = "retro" | "neon" | "pastel" | "pixel";
+
 // Coordenadas internas fijas (no responsive); se escalan por CSS en el componente.
-const COLS = 10;
+// Enmienda 2026-09-06: tablero de 15 columnas de ancho (antes 10).
+const COLS = 15;
 const ROWS = 20;
 const BLOCK = 30;
-const BOARD_W = COLS * BLOCK; // 300
+const BOARD_W = COLS * BLOCK; // 450
 const BOARD_H = ROWS * BLOCK; // 600
 const NEXT_W = 120;
 const NEXT_H = 120;
@@ -221,37 +231,167 @@ function rotateCW(shape: number[][]): number[][] {
   return result;
 }
 
-// ── Render ──────────────────────────────────────────────────────────────────
-const BOARD_BG = "#0b0e13";
-const GRID_COLOR = "rgba(255, 255, 255, 0.06)";
-const BLOCK_HIGHLIGHT = "rgba(255, 255, 255, 0.3)"; // bisel superior + símbolo (antes CSS `--block-highlight`)
+// ── Render: skins ───────────────────────────────────────────────────────────
+// Port de `SKINS` de game.js. Cada skin trae su paleta (misma estructura que
+// COLORS: índice 0 = null, 1–12 = colores de pieza), su fondo, su color de grid
+// y su color de bisel/símbolo (game.js los leía de CSS vars según `data-theme`;
+// aquí van fijos), y su propia función de dibujo de bloque.
+interface Skin {
+  label: string;
+  bg: string;
+  grid: string;
+  highlight: string;
+  colors: (string | null)[];
+  draw: (
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+    skin: Skin,
+    symbol: string | undefined,
+  ) => void;
+}
 
-/** Renderizador único de bloque (game.js tenía 4 skins; aquí solo el estilo "retro"). */
-function drawBlock(
-  context: CanvasRenderingContext2D,
+const NEON_COLORS = [
+  null,
+  "#18ffff",
+  "#ffea00",
+  "#ea80fc",
+  "#69f0ae",
+  "#ff5252",
+  "#448aff",
+  "#ffab40",
+  "#ff4081",
+  "#b2ff59",
+  "#7c4dff",
+  "#ffff8d",
+  "#90a4ae",
+];
+const PASTEL_COLORS = [
+  null,
+  "#a8e6e4",
+  "#ffe9a8",
+  "#e0bbe4",
+  "#b8e0c8",
+  "#f5b8b8",
+  "#bcd4f5",
+  "#ffd6a8",
+  "#f7c1d4",
+  "#d4e8b8",
+  "#c9bce6",
+  "#fff5c8",
+  "#c0cbd1",
+];
+
+function drawSkinFill(
+  c: CanvasRenderingContext2D,
   x: number,
   y: number,
-  colorIndex: number,
   size: number,
-  alpha: number,
-  options?: { color?: string; symbol?: string },
+  color: string,
+  highlight: string,
 ) {
-  if (!colorIndex) return;
-  const color = options?.color || COLORS[colorIndex] || "#888";
-  context.globalAlpha = alpha;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  context.fillStyle = BLOCK_HIGHLIGHT;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  if (options?.symbol) {
-    context.fillStyle = BLOCK_HIGHLIGHT;
-    context.font = `${Math.floor(size * 0.6)}px sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(options.symbol, x * size + size / 2, y * size + size / 2 + 1);
-  }
-  context.globalAlpha = 1;
+  c.fillStyle = color;
+  c.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  c.fillStyle = highlight;
+  c.fillRect(x * size + 1, y * size + 1, size - 2, 4);
 }
+
+function drawSkinSymbol(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  symbol: string | undefined,
+  highlight: string,
+) {
+  if (!symbol) return;
+  c.fillStyle = highlight;
+  c.font = `${Math.floor(size * 0.6)}px sans-serif`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText(symbol, x * size + size / 2, y * size + size / 2 + 1);
+}
+
+/** Oscurece/aclara un color `#rrggbb` (amount negativo = más oscuro). */
+function shadeColor(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255;
+  let g = (n >> 8) & 255;
+  let b = n & 255;
+  r = Math.max(0, Math.min(255, Math.round(r + r * amount)));
+  g = Math.max(0, Math.min(255, Math.round(g + g * amount)));
+  b = Math.max(0, Math.min(255, Math.round(b + b * amount)));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+const SKINS: Record<SkinName, Skin> = {
+  retro: {
+    label: "Retro",
+    bg: "#0b0e13",
+    grid: "rgba(255, 255, 255, 0.06)",
+    highlight: "rgba(255, 255, 255, 0.3)",
+    colors: COLORS,
+    draw: (c, x, y, s, color, skin, sym) => {
+      drawSkinFill(c, x, y, s, color, skin.highlight);
+      drawSkinSymbol(c, x, y, s, sym, skin.highlight);
+    },
+  },
+  neon: {
+    label: "Neón",
+    bg: "#05060a",
+    grid: "rgba(255, 255, 255, 0.05)",
+    highlight: "rgba(255, 255, 255, 0.35)",
+    colors: NEON_COLORS,
+    draw: (c, x, y, s, color, skin, sym) => {
+      c.shadowBlur = s * 0.5;
+      c.shadowColor = color;
+      drawSkinFill(c, x, y, s, color, skin.highlight);
+      c.shadowBlur = 0;
+      drawSkinSymbol(c, x, y, s, sym, skin.highlight);
+    },
+  },
+  pastel: {
+    label: "Pastel",
+    bg: "#e8e6f0",
+    grid: "rgba(20, 24, 40, 0.1)",
+    highlight: "rgba(255, 255, 255, 0.6)",
+    colors: PASTEL_COLORS,
+    draw: (c, x, y, s, color, skin, sym) => {
+      drawSkinFill(c, x, y, s, color, skin.highlight);
+      // esquinas redondeadas simuladas: game.js usaba clearRect (canvas
+      // transparente); aquí el canvas es opaco, así que se pinta con el fondo.
+      const px = x * s;
+      const py = y * s;
+      c.fillStyle = skin.bg;
+      c.fillRect(px + 1, py + 1, 2, 2);
+      c.fillRect(px + s - 3, py + 1, 2, 2);
+      c.fillRect(px + 1, py + s - 3, 2, 2);
+      c.fillRect(px + s - 3, py + s - 3, 2, 2);
+      drawSkinSymbol(c, x, y, s, sym, skin.highlight);
+    },
+  },
+  pixel: {
+    label: "Pixel art",
+    bg: "#12131a",
+    grid: "rgba(255, 255, 255, 0.05)",
+    highlight: "rgba(255, 255, 255, 0.28)",
+    colors: COLORS,
+    draw: (c, x, y, s, color, skin, sym) => {
+      drawSkinFill(c, x, y, s, color, skin.highlight);
+      const px = x * s;
+      const py = y * s;
+      const step = Math.max(3, Math.floor(s / 7));
+      const cells = Math.floor((s - 6) / step);
+      c.fillStyle = shadeColor(color, -0.4);
+      for (let gy = 0; gy < cells; gy++)
+        for (let gx = 0; gx < cells; gx++)
+          if ((gx + gy) % 2 === 0) c.fillRect(px + 3 + gx * step, py + 3 + gy * step, 2, 2);
+      drawSkinSymbol(c, x, y, s, sym, skin.highlight);
+    },
+  },
+};
 
 export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions): TetrisHandle {
   if (typeof opts.onGameOver !== "function") {
@@ -278,60 +418,46 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   const nextCtx: CanvasRenderingContext2D = maybeNextCtx;
 
   // ── Audio ──────────────────────────────────────────────────────────────────
-  // WebAudio sintetizado (sin assets). El AudioContext se abre de forma perezosa
-  // en el primer sonido (línea limpiada tras un keydown) para cumplir la política
-  // de autoplay.
-  let audioCtx: AudioContext | null = null;
+  // Samples de Kenney "Impact Sounds" (CC0), servidos desde `public/sounds/tetris/`
+  // (mismo patrón de pools de <audio> que `asteroids.ts`). El primer sonido nace
+  // de un `keydown` (rotar / hard drop / lock), así que cumple la política de
+  // autoplay sin necesidad de un AudioContext perezoso.
+  const makeSound = (src: string, volume: number, poolSize = 4) => {
+    const pool = Array.from({ length: poolSize }, () => {
+      const a = new Audio(src);
+      a.volume = volume;
+      a.preload = "auto";
+      return a;
+    });
+    let i = 0;
+    return (vol?: number) => {
+      const a = pool[i++ % pool.length];
+      try {
+        a.currentTime = 0;
+        if (vol !== undefined) a.volume = Math.max(0, Math.min(1, vol));
+        void a.play().catch(() => {});
+      } catch {
+        /* ignora fallos de reproducción (autoplay, etc.) */
+      }
+    };
+  };
 
-  function getAudioCtx(): AudioContext {
-    if (!audioCtx) {
-      const AC =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioCtx = new AC();
-    }
-    return audioCtx;
-  }
+  const SND = "/sounds/tetris/";
+  const playRotateSound = makeSound(`${SND}impactTin_medium_000.ogg`, 0.22, 3);
+  const playHardDropSound = makeSound(`${SND}impactPlate_heavy_000.ogg`, 0.4, 3);
+  const playLockSound = makeSound(`${SND}impactWood_medium_000.ogg`, 0.3, 4);
+  const playLineClearSound = makeSound(`${SND}impactGlass_light_000.ogg`, 0.4, 3);
+  const playTetrisSound = makeSound(`${SND}impactGlass_heavy_000.ogg`, 0.5, 2);
+  const playTSpinSound = makeSound(`${SND}impactBell_heavy_000.ogg`, 0.45, 2);
+  const playB2BSound = makeSound(`${SND}impactMetal_heavy_001.ogg`, 0.4, 2);
+  const playComboRaw = makeSound(`${SND}impactMetal_light_000.ogg`, 0.3, 3);
+  const playPerfectClearSound = makeSound(`${SND}impactBell_heavy_002.ogg`, 0.5, 2);
+  const playPowerupSound = makeSound(`${SND}impactMetal_medium_000.ogg`, 0.4, 3);
+  const playGameOverSound = makeSound(`${SND}impactPlate_heavy_003.ogg`, 0.5, 1);
 
-  function playTone(
-    freq: number,
-    duration: number,
-    type: OscillatorType = "square",
-    delay = 0,
-    gainValue = 0.15,
-  ) {
-    const ac = getAudioCtx();
-    if (ac.state === "suspended") void ac.resume();
-    const osc = ac.createOscillator();
-    const gain = ac.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    const startTime = ac.currentTime + delay;
-    gain.gain.setValueAtTime(gainValue, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.connect(gain);
-    gain.connect(ac.destination);
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-  }
-
-  function playComboSound(comboCount: number) {
-    playTone(440 + Math.min(comboCount, 10) * 60, 0.15);
-  }
-
-  function playTSpinSound() {
-    playTone(660, 0.1);
-    playTone(880, 0.12, "square", 0.08);
-  }
-
-  function playB2BSound() {
-    playTone(330, 0.12);
-    playTone(660, 0.15, "square", 0.1);
-  }
-
-  function playPerfectClearSound() {
-    [523, 659, 784, 1046].forEach((f, i) => playTone(f, 0.18, "triangle", i * 0.09, 0.18));
-  }
+  /** El combo sube de volumen con la cadena (como el pitch ascendente del original). */
+  const playComboSound = (comboCount: number) =>
+    playComboRaw(Math.min(0.5, 0.25 + comboCount * 0.04));
 
   // ── Estado de la partida (antes `let` a nivel de módulo en game.js) ─────────
   let board: Board = createBoard();
@@ -355,6 +481,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   let pendingSingle = false;
   let combo = 0;
   let b2bTetrisActive = false;
+  let skin: SkinName = "retro"; // solo display; no se resetea en initGame
 
   // Popup transitorio de combo / T-spin: se dibuja en la franja superior del
   // canvas del tablero con fade corto (~900 ms). Detalle de render en el paso 6.
@@ -404,6 +531,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
         current.shape = rotated;
         current.x += kick;
         lastActionWasRotate = true;
+        playRotateSound();
         return;
       }
     }
@@ -503,6 +631,8 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
 
     lines += cleared;
     combo++;
+    if (cleared >= 4) playTetrisSound();
+    else playLineClearSound();
     const messages: string[] = [];
     let gained = wasTSpin ? TSPIN_SCORES[cleared] * level : LINE_SCORES[cleared] * level;
 
@@ -554,6 +684,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
     const gy = ghostY();
     score += (gy - current.y) * 2;
     current.y = gy;
+    playHardDropSound();
     lockPiece();
   }
 
@@ -636,6 +767,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
         break;
     }
     score += POWERUP_SCORE;
+    playPowerupSound();
   }
 
   function lockPiece() {
@@ -643,6 +775,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
       applyPowerup(current.powerup);
     } else {
       merge();
+      playLockSound();
     }
     clearLines();
     spawn();
@@ -665,6 +798,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
     gameOver = true;
     stopLoop();
     draw();
+    playGameOverSound();
     if (!gameOverNotified) {
       gameOverNotified = true;
       opts.onGameOver(score);
@@ -696,8 +830,26 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────────
+  /** Dibuja un bloque con el skin activo (port de `drawBlock` de game.js). */
+  function drawBlock(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    colorIndex: number,
+    size: number,
+    alpha: number,
+    options?: { color?: string; symbol?: string },
+  ) {
+    if (!colorIndex) return;
+    const sk = SKINS[skin];
+    const color = options?.color || sk.colors[colorIndex] || COLORS[colorIndex] || "#888";
+    context.globalAlpha = alpha;
+    sk.draw(context, x, y, size, color, sk, options?.symbol);
+    context.globalAlpha = 1;
+  }
+
   function drawGrid() {
-    ctx.strokeStyle = GRID_COLOR;
+    ctx.strokeStyle = SKINS[skin].grid;
     ctx.lineWidth = 0.5;
     for (let c = 1; c < COLS; c++) {
       ctx.beginPath();
@@ -746,7 +898,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
   }
 
   function draw() {
-    ctx.fillStyle = BOARD_BG;
+    ctx.fillStyle = SKINS[skin].bg;
     ctx.fillRect(0, 0, BOARD_W, BOARD_H);
     drawGrid();
 
@@ -787,7 +939,7 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
 
   function drawNext() {
     const NB = 30;
-    nextCtx.fillStyle = BOARD_BG;
+    nextCtx.fillStyle = SKINS[skin].bg;
     nextCtx.fillRect(0, 0, NEXT_W, NEXT_H);
     const shape = next.shape;
     const offX = Math.floor((4 - shape[0].length) / 2);
@@ -898,13 +1050,14 @@ export function createTetrisGame(canvas: HTMLCanvasElement, opts: TetrisOptions)
       paused = false;
       startLoop();
     },
+    setSkin: (s: SkinName) => {
+      skin = s;
+      draw();
+      drawNext();
+    },
     destroy: () => {
       stopLoop();
       window.removeEventListener("keydown", onKeyDown);
-      if (audioCtx) {
-        void audioCtx.close();
-        audioCtx = null;
-      }
     },
   };
 }

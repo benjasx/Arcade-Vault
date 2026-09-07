@@ -3,6 +3,22 @@
 > **Status:** Aprobado
 > **Depends on:** SPEC 05, SPEC 06
 > **Date:** 2026-09-06
+> **Enmienda 2026-09-06 (durante la implementación):**
+>
+> 1. Se reincorporan los **4 skins** de la referencia (Retro / Neón / Pastel /
+>    Pixel art) como `<select>` en `.player-hud`; cada skin trae paleta, fondo,
+>    color de grid y función de dibujo de bloque propios (port de `SKINS` de
+>    `game.js`). Sustituye al toggle claro/oscuro que se había planteado. El
+>    selector de nivel inicial sigue fuera.
+> 2. El tablero pasa a **15 columnas** de ancho (antes 10): `COLS = 15` →
+>    `450×600` internos, `aspect-ratio` del canvas 3:4 (antes 1:2). `ROWS` sigue
+>    en 20. Cambia el balance respecto al tetris clásico; asumido.
+> 3. El audio deja de ser **WebAudio sintetizado** y pasa a **samples de Kenney
+>    "Impact Sounds" (CC0)** en `public/sounds/tetris/` (pools de `<audio>`, como
+>    `asteroids.ts`). Se añaden efectos que el original no tenía (rotar, hard
+>    drop, lock, línea, tetris, power-up, game over) además de combo / T-spin /
+>    B2B / perfect clear. Ya no hay `AudioContext`.
+>
 > **Objective:** Portar el tetris canvas de `references/started-games/03-claude-tetris/game.js` a un controlador imperativo TypeScript montado en un componente cliente nuevo, asociado a una entrada de catálogo nueva `tetris` (título visible TETRABYTE), con el HUD escalar en la fila `.player-hud` de la plataforma y la puntuación final guardada por el modal de fin de juego.
 
 ---
@@ -67,23 +83,26 @@ Decisiones ya cerradas con el usuario (no reabrir):
 - Se **conservan las mecánicas** (pentominós, 1×1, 3×3 hueco, los 5 power-ups,
   T-spin, back-to-back, combo, perfect clear, comodín tinte) y el balance del
   original sin cambios.
-- Se **podan** las 4 skins, el toggle de tema claro/oscuro y el selector de nivel
-  inicial: el marco CRT de la plataforma ya es la estética; `startLevel` queda fijo
-  a 1.
+- Se **poda** el selector de nivel inicial; `startLevel` queda fijo a 1. **Se
+  conservan** los 4 skins (Retro / Neón / Pastel / Pixel art) como `<select>` en
+  `.player-hud`; cada uno con su paleta, fondo, color de grid y dibujo de bloque
+  (port de `SKINS`). Preferencia en `localStorage` (`tetris-skin`).
 - El HUD escalar (`score` / `lines` / `level` / estado de power-up) se pinta en la
   fila `.player-hud` de la plataforma vía `onStats`; tablero, ghost y preview NEXT
   se siguen dibujando **en canvas**; los popups de combo / T-spin se dibujan en la
   franja superior del canvas del tablero.
 - La preview NEXT va en un **segundo `<canvas>`** (`opts.nextCanvas`), como el
   `#next-canvas` del original.
-- Se **conserva el audio** WebAudio sintetizado; cero assets nuevos.
+- **Audio** con samples de Kenney "Impact Sounds" (CC0) en `public/sounds/tetris/`
+  (enmienda; antes se planteaba conservar el WebAudio sintetizado).
 - Se **quita** el reinicio propio del juego (botón Reiniciar, pantalla de inicio,
   tabla de highscores DOM): el modal de la plataforma es el dueño del reinicio y
   del guardado.
 - **No** hay pausa interna con `P` / `Esc`; el botón PAUSA de la plataforma es el
   único punto de pausa.
-- El canvas mantiene **coordenadas internas 300×600** (tablero) y **120×120**
-  (next) y se escala por CSS. Tetris es 1:2, no 4:3: lleva su propio bloque CSS.
+- El canvas mantiene **coordenadas internas 450×600** (tablero, 15×20) y
+  **120×120** (next) y se escala por CSS. El tablero es 3:4, no el 4:3 del CRT:
+  lleva su propio bloque CSS.
 
 ---
 
@@ -97,6 +116,9 @@ Decisiones ya cerradas con el usuario (no reabrir):
   planos en `main` (no es gitlink de submódulo, a diferencia de `02-asteroides` en
   SPEC 05). **No hay paso de materialización.** Quedan como referencia de lectura;
   no entran en el build de Next ni se importan desde `app/`.
+- **Assets de sonido** (enmienda 2026-09-06): 11 `.ogg` de Kenney "Impact Sounds"
+  (CC0) copiados a `public/sounds/tetris/` + un `LICENSE.txt`. Subconjunto del pack
+  que ya vive en `references/.../03-claude-tetris/kenney_impact-sounds/`.
 - **Registro central** `lib/games/registry.ts` (módulo nuevo):
   - `GAME_REGISTRY: Record<string, ComponentType<{ game: Game }>>` con las entradas
     `rocas: AsteroidsPlayer` y `tetris: TetrisPlayer`.
@@ -126,10 +148,11 @@ Decisiones ya cerradas con el usuario (no reabrir):
     `removeRow`, `isFilledOrWall`, `detectTSpin`, `isBoardEmpty`, `clearLines`,
     `ghostY`, `hardDrop`, `softDrop`, `powerupCenter`, `clearCell`, `applyBomb`,
     `applyLightning`, `applyDye`, `applyGravityPowerup`, `applyFreeze`,
-    `applyPowerup`, `lockPiece`, `spawn`); render (`drawBlock` con un único
-    renderizador de bloque, `drawGrid`, `draw`, `drawNext`, franja de popups); el
-    audio (`getAudioCtx`, `playTone`, `playComboSound`, `playTSpinSound`,
-    `playB2BSound`, `playPerfectClearSound`); el bucle `loop` y `initGame`.
+    `applyPowerup`, `lockPiece`, `spawn`); render (`SKINS` con los 4 skins +
+    `drawSkinFill` / `drawSkinSymbol` / `shadeColor`, `drawBlock` que despacha al
+    skin activo, `drawGrid`, `draw`, `drawNext`, franja de popups); el audio
+    (`makeSound` con pools de `<audio>` sobre `public/sounds/tetris/`, un
+    `play*` por evento); el bucle `loop` y `initGame`.
   - El estado, hoy `let` a nivel de módulo, pasa a vivir en el cierre de
     `createTetrisGame`.
   - `create` fija `canvas.width = 300` / `canvas.height = 600` y
@@ -144,8 +167,8 @@ Decisiones ya cerradas con el usuario (no reabrir):
     `opts.onStats({ score, lines, level, powerupLabel })`.
   - `pause()` detiene el scheduling de rAF. `resume()` lo reanuda reseteando
     `lastTime` para evitar salto de `dt` y del contador de `freeze`. `restart()`
-    llama `initGame()` y reanuda. `destroy()` cancela el rAF pendiente, quita el
-    listener de teclado y cierra el `AudioContext` si se abrió.
+    llama `initGame()` y reanuda. `destroy()` cancela el rAF pendiente y quita el
+    listener de teclado.
 - **Componente** `components/tetris-player.tsx` (`"use client"`):
   - Marco CRT reutilizando clases de `app/globals.css` (`.av-player`, `.crt`,
     `.crt-screen`, `.crt-bottom`), con dos `<canvas>` referenciados por `ref`
@@ -170,16 +193,17 @@ Decisiones ya cerradas con el usuario (no reabrir):
   - Bloque `.cover-tetris` (base oscura + `::after` con gradientes que dibujan
     tetrominós cayendo en cyan/magenta/yellow + `::before` con glifo unicode),
     junto a las demás portadas.
-  - Bloque para el escalado del tablero 1:2 dentro de `.crt-screen`: fila centrada
-    con el `<canvas>` del tablero a `height: 100%; width: auto` (aspect-ratio 1/2)
-    y el `<canvas>` de next pequeño al lado; sin overflow horizontal en los
-    breakpoints existentes. **No** se reusa `.asteroids-canvas` (es 4:3).
+  - Bloque para el escalado del tablero 3:4 (450×600) dentro de `.crt-screen`:
+    `.tetris-stage` en grid `1fr auto 1fr` (tablero centrado en la columna
+    central, NEXT pegado a su borde derecho), `.crt-screen.tetris` pierde el
+    `aspect-ratio` 4:3 y acota la altura con `clamp`; sin overflow horizontal en
+    los breakpoints existentes. **No** se reusa `.asteroids-canvas` (es 4:3).
 
 **Out of scope (para futuras specs):**
 
 - Motor real para los otros 6 juegos simulados; siguen con `GamePlayer`.
 - Reusar o poblar la entrada `caida` con este motor.
-- Skins, toggle de tema claro/oscuro y selector de nivel inicial del original.
+- Selector de nivel inicial del original.
 - Pausa interna con `P` / `Esc` (necesitaría un callback `onPause` para no
   desincronizar el estado React).
 - Persistir `líneas` y `mejor combo` en el leaderboard; `submit_score` guarda solo
@@ -215,10 +239,13 @@ interface TetrisOptions {
   onStats: (stats: { score: number; lines: number; level: number; powerupLabel: string }) => void;
 }
 
+type SkinName = "retro" | "neon" | "pastel" | "pixel";
+
 interface TetrisHandle {
   pause: () => void;
   resume: () => void;
   restart: () => void;
+  setSkin: (skin: SkinName) => void; // enmienda: skin visual del canvas
   destroy: () => void;
 }
 
@@ -253,9 +280,10 @@ semántica):
 // paused, gameOver, gameOverNotified
 // lastTime, dropAccum, dropInterval
 // freezeRemaining, linesSincePowerup, pendingPowerup, pendingSingle
-// combo, b2bTetrisActive, lastActionWasRotate, maxCombo
-// audioCtx, rafId
-// COLS = 10, ROWS = 20, BLOCK = 30  (constantes; no responsive)
+// combo, b2bTetrisActive, lastActionWasRotate
+// rafId  (ya no hay audioCtx: audio por samples)  ← enmienda
+// skin ("retro" | "neon" | "pastel" | "pixel"; solo display, no se resetea en initGame)  ← enmienda
+// COLS = 15, ROWS = 20, BLOCK = 30  (constantes; no responsive)  ← enmienda: COLS 10 → 15
 ```
 
 Estado local de `components/tetris-player.tsx`:
@@ -269,6 +297,7 @@ const [busy, setBusy] = useState(false);
 const [saveErr, setSaveErr] = useState<string | null>(null);
 const [pending, setPending] = useState<"again" | "vault" | "login" | "exit" | null>(null);
 const [stats, setStats] = useState({ score: 0, lines: 0, level: 1, powerupLabel: "" });
+const [skin, setSkin] = useState<SkinName>("retro"); // enmienda; se lee de localStorage (tetris-skin) en el effect
 ```
 
 Convenciones (heredadas de SPEC 01 / 05):
@@ -311,8 +340,8 @@ return <Player game={game} />`. En `lib/games.ts`, cambiar `isPlayable(id)` a
    `opts.nextCanvas`, fija `width` / `height` de ambos canvas, obtiene los dos
    contextos 2d, pinta el fondo, monta `keydown` en `window` con `preventDefault`
    para flechas y `Space`, y un bucle `requestAnimationFrame` vacío. Devuelve
-   `{ pause, resume, restart, destroy }` con `destroy` quitando el listener,
-   cancelando el rAF y cerrando el `AudioContext`. Verificación: `npm run lint`
+   `{ pause, resume, restart, setSkin, destroy }` con `destroy` quitando el
+   listener y cancelando el rAF. Verificación: `npm run lint`
    limpio; montado en prueba manual el canvas se ve; `destroy()` no deja listeners
    ni rAF colgando.
 
@@ -338,11 +367,11 @@ return <Player game={game} />`. En `lib/games.ts`, cambiar `isPlayable(id)` a
    al morir dispara `onGameOver` con el score correcto y el canvas no se reinicia
    con ninguna tecla.
 
-6. **Render, audio y loop.** Portar `drawBlock` (un único renderizador de bloque,
-   sin `SKINS`), `drawGrid`, `draw`, `drawNext` (sobre `opts.nextCanvas`), la
+6. **Render, audio y loop.** Portar `SKINS` (4 skins) + `drawBlock` (despacha al
+   skin activo), `drawGrid`, `draw`, `drawNext` (sobre `opts.nextCanvas`), la
    franja superior de popups de combo / T-spin (fondo semitransparente, fade
-   ~900 ms), el audio (`getAudioCtx` creado en el primer `keydown`, `playTone` y
-   los cuatro sonidos), y el `loop` con `dt` capado a 50 ms y el decremento de
+   ~900 ms), el audio (`makeSound` + un `play*` por evento sobre
+   `public/sounds/tetris/`), y el `loop` con `dt` capado a 50 ms y el decremento de
    `freezeRemaining`. Implementar `pause()` (deja de programar rAF), `resume()`
    (`lastTime = null` y reanuda), `restart()` (`initGame()` + `resume()`).
    Verificación: partida completa con power-ups, T-spin, combo y perfect clear
@@ -364,16 +393,15 @@ registerPlay(game.id)` en `onGameOver`. Añadir `tetris: TetrisPlayer` a
 
 8. **Portada y escalado CSS.** Añadir a `app/globals.css` el bloque
    `.cover-tetris` (base + `::after` + `::before`) junto a las demás portadas, y
-   el bloque de escalado del tablero 1:2 dentro de `.crt-screen` (fila centrada
+   el bloque de escalado del tablero 3:4 dentro de `.crt-screen` (grid centrado
    tablero + next, sin overflow horizontal). Verificación: la portada se ve en el
    grid de `/juegos`; en pantalla ancha y en el breakpoint de 720px el tablero
    escala sin deformar y la página no hace scroll horizontal.
 
 9. **Limpieza.** `npm run lint` y `npm run build` sin errores ni warnings nuevos;
    consola sin warnings de hidratación en `/juego/tetris/jugar`; al pulsar SALIR
-   no quedan listeners `keydown` ni `requestAnimationFrame` activos ni
-   `AudioContext` abierto. Confirmar que el bloque regenerado de `AGENTS.md` va
-   junto al commit.
+   no quedan listeners `keydown` ni `requestAnimationFrame` activos. Confirmar que
+   el bloque regenerado de `AGENTS.md` va junto al commit.
 
 ---
 
@@ -427,14 +455,25 @@ registerPlay(game.id)` en `onGameOver`. Añadir `tetris: TetrisPlayer` a
 - [ ] `PAUSA` detiene el bucle y cambia a `REANUDAR`; al reanudar no hay salto de
       `dt` ni del contador de `freeze` (la pieza no "teletransporta").
 - [ ] `SALIR` navega a `/juego/tetris`; tras salir no quedan listeners `keydown`
-      ni `requestAnimationFrame` en marcha ni `AudioContext` abierto.
+      ni `requestAnimationFrame` en marcha.
+- [ ] _(enmienda)_ Los efectos de sonido suenan en sus eventos (rotar, hard drop,
+      lock, línea / tetris, T-spin, B2B, combo, perfect clear, power-up, game
+      over); los `.ogg` se sirven desde `/sounds/tetris/`.
 - [ ] `tetris` aparece en `/juegos`, en la preview de la home y en `/salon`; el
       resto de juegos sigue con `GamePlayer` sin cambios de comportamiento.
 - [ ] El nombre inicial del input del modal es el del usuario con sesión, o
       `INVITADO` sin sesión. _(igual que `asteroids-player.tsx`.)_
 - [ ] La portada `.cover-tetris` se ve en el grid; el `<canvas>` del tablero
-      escala manteniendo proporción 1:2, sin deformación ni scroll horizontal en
-      los breakpoints existentes.
+      (15×20, 450×600) escala manteniendo proporción 3:4, centrado, sin deformación
+      ni scroll horizontal en los breakpoints existentes.
+- [ ] _(enmienda)_ El `<select>` de skin en `.player-hud` tiene 4 opciones
+      (Retro / Neón / Pastel / Pixel art); cambiarlo repinta el tablero y la
+      preview NEXT con la paleta, fondo, grid y dibujo de bloque de ese skin. La
+      elección se guarda en `localStorage` (`tetris-skin`) y se aplica al recargar.
+      El marco CRT y el resto de la app no cambian. `JUGAR DE NUEVO` no resetea el
+      skin.
+- [ ] _(enmienda)_ El tablero tiene 15 columnas: una línea se limpia al llenar las
+      15 celdas de la fila.
 - [ ] `npm run build` y `npm run lint` terminan sin errores ni warnings nuevos;
       sin warnings de hidratación de React en consola.
 
@@ -473,16 +512,30 @@ registerPlay(game.id)` en `onGameOver`. Añadir `tetris: TetrisPlayer` a
 - **Sí:** popups de combo / T-spin dibujados en la franja superior del canvas del
   tablero. Son texto transitorio; puentearlos a React obligaría a un estado por
   frame.
-- **Sí:** conservar mecánicas (pentominós, 1×1, 3×3 hueco, 5 power-ups, T-spin,
-  B2B, combo, perfect clear, comodín tinte) y el balance sin cambios. Menos edición
-  y menos riesgo que podar el sistema. Precedente SPEC 05 (power-ups "tal cual").
-  Elegido por el usuario.
-- **No:** skins, toggle de tema claro/oscuro, selector de nivel inicial. El marco
-  CRT de la plataforma ya fija la estética; `startLevel` queda fijo a 1. Elegido
-  por el usuario.
-- **Sí:** conservar el audio WebAudio sintetizado. Cero assets, solo código. El
-  `AudioContext` se crea en el primer `keydown` para cumplir la política de
-  autoplay. Elegido por el usuario.
+- **Sí:** conservar las mecánicas (pentominós, 1×1, 3×3 hueco, 5 power-ups,
+  T-spin, B2B, combo, perfect clear, comodín tinte). El **balance** cambia por el
+  tablero de 15 de ancho (enmienda); el resto de fórmulas de puntuación/nivel
+  siguen intactas. Precedente SPEC 05 (power-ups "tal cual").
+- **No:** selector de nivel inicial. `startLevel` queda fijo a 1. Elegido por el
+  usuario.
+- **Sí:** los 4 skins de la referencia como `<select>` (enmienda 2026-09-06). Se
+  habían podado, pero el tablero se veía plano y el usuario los pidió. Port de
+  `SKINS` de `game.js`: cada skin trae paleta, fondo, color de grid y función de
+  dibujo (Retro llano, Neón con glow, Pastel con esquinas, Pixel con dithering).
+  Colores fijos en `lib/games/tetris.ts` (no lee CSS vars como el original);
+  `setSkin` en el `TetrisHandle`; `<select>` en `.player-hud`; preferencia en
+  `localStorage` (`tetris-skin`). El marco CRT y el resto de la app no cambian.
+- **Sí:** tablero de **15 columnas** (enmienda 2026-09-06). Pedido por el usuario;
+  `ROWS` sigue en 20. La física del port ya es paramétrica en `COLS`, así que solo
+  cambia `COLS`, el tamaño interno del canvas (450×600) y el `aspect-ratio` CSS
+  (3:4). Hace la partida más fácil que el tetris clásico; asumido.
+- **Sí:** audio con samples de Kenney "Impact Sounds" (CC0) en
+  `public/sounds/tetris/` (enmienda 2026-09-06). Se había planteado conservar el
+  WebAudio sintetizado del original, pero el usuario aportó el pack de sonidos.
+  Pools de `<audio>` como `asteroids.ts`; un `play*` por evento (rotar, hard drop,
+  lock, línea, tetris, T-spin, B2B, combo con volumen creciente, perfect clear,
+  power-up, game over). Sin `AudioContext`; el primer sonido nace de un `keydown`,
+  así que la política de autoplay se cumple sola.
 - **Sí:** quitar el reinicio propio del juego (botón Reiniciar, pantalla de inicio,
   tabla de highscores DOM). El modal de la plataforma es el dueño del reinicio y
   del guardado; mantener ambos duplicaría la acción y descoordinaría el estado de
@@ -495,29 +548,30 @@ registerPlay(game.id)` en `onGameOver`. Añadir `tetris: TetrisPlayer` a
   scheduling, más limpio que confiar en el cap.
 - **No:** persistir `líneas` y `mejor combo` en el leaderboard. `submit_score`
   guarda solo `score`, como el resto de juegos. Otra spec si se quiere.
-- **Sí:** coordenadas internas 300×600 (tablero) y 120×120 (next) fijas, escaladas
-  por CSS. No se toca `COLS` / `ROWS` / `BLOCK` ni la física.
-- **No:** responsive real (recalcular `COLS` / `ROWS` / `BLOCK`). El original fija
-  el tamaño y toda la física asume 10×20; escalar por CSS basta para el MVP.
-- **Sí:** bloque CSS propio para el tablero 1:2, no reusar `.asteroids-canvas` (es
-  4:3 con `object-fit: contain`).
+- **Sí:** coordenadas internas fijas (450×600 tablero, 120×120 next), escaladas por
+  CSS. `COLS = 15` / `ROWS = 20` / `BLOCK = 30` son constantes; la física no es
+  responsive (no se recalculan con el tamaño de pantalla).
+- **No:** responsive real (recalcular `COLS` / `ROWS` / `BLOCK` según viewport).
+  Escalar por CSS basta para el MVP.
+- **Sí:** bloque CSS propio para el tablero 3:4 (grid `1fr auto 1fr`), no reusar
+  `.asteroids-canvas` (es 4:3 con `object-fit: contain`).
 
 ---
 
 ## Riesgos
 
-| Riesgo                                                                                                   | Mitigación                                                                                                                                                                       |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requestAnimationFrame` o el listener de teclado sobreviven al desmontar el componente                   | `createTetrisGame` guarda el id de rAF y la referencia del handler en el cierre; `destroy()` cancela, desregistra y cierra el `AudioContext`. Un criterio lo verifica con SALIR. |
-| TypeScript strict: `game.js` usa matrices `number[][]` sin tipo, piezas con `powerup?` opcional y `type` | El port tipa `Cell` / `Board` / `Piece` / `PowerupType`; el paso 4–5 no cierra hasta que `npm run build` pasa sin errores de tipos.                                              |
-| El segundo canvas (`nextCanvas`) llega `null` o en orden de refs inesperado en el primer render          | `createTetrisGame` valida ambos canvas y sus contextos 2d antes de arrancar, y solo se llama dentro de `useEffect`.                                                              |
-| `Space` / flechas hacen scroll de la página o activan un botón enfocado                                  | El listener hace `preventDefault` para `Space` y flechas; PAUSA / SALIR no roban el foco al canvas en uso normal.                                                                |
-| `AudioContext` bloqueado por la política de autoplay del navegador                                       | `getAudioCtx` se llama en el primer `keydown`, no en el montaje; si `state === 'suspended'` se hace `resume()`.                                                                  |
-| El tablero 1:2 deja mucho letterbox horizontal dentro de `.crt-screen`                                   | Bloque CSS propio: fila centrada con tablero (`height:100%`, aspect-ratio 1/2) + next pequeño al lado; no se reusa el `object-fit: contain` de asteroides.                       |
-| Los popups de combo dibujados en canvas tapan el tablero                                                 | Se dibujan en la franja superior con fondo semitransparente y fade corto (~900 ms), como el `#combo-popup` DOM del original.                                                     |
-| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render             | Ambos `<canvas>` se montan vacíos; `createTetrisGame` solo toca `window` / DOM dentro de `useEffect`. Un criterio lo verifica.                                                   |
-| Borrar `PLAYABLE_GAME_IDS` rompe algún consumidor no detectado                                           | El paso 1 hace `grep` de `PLAYABLE_GAME_IDS` e `isPlayable` antes de borrar; `isPlayable` conserva su firma (`id in GAME_REGISTRY`).                                             |
-| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                                    | Se commitea junto al trabajo; borrarlo del diff solo lo regenera (documentado en `CLAUDE.md` / `AGENTS.md`).                                                                     |
+| Riesgo                                                                                                   | Mitigación                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `requestAnimationFrame` o el listener de teclado sobreviven al desmontar el componente                   | `createTetrisGame` guarda el id de rAF y la referencia del handler en el cierre; `destroy()` cancela y desregistra. Un criterio lo verifica con SALIR.                                                 |
+| TypeScript strict: `game.js` usa matrices `number[][]` sin tipo, piezas con `powerup?` opcional y `type` | El port tipa `Cell` / `Board` / `Piece` / `PowerupType`; el paso 4–5 no cierra hasta que `npm run build` pasa sin errores de tipos.                                                                    |
+| El segundo canvas (`nextCanvas`) llega `null` o en orden de refs inesperado en el primer render          | `createTetrisGame` valida ambos canvas y sus contextos 2d antes de arrancar, y solo se llama dentro de `useEffect`.                                                                                    |
+| `Space` / flechas hacen scroll de la página o activan un botón enfocado                                  | El listener hace `preventDefault` para `Space` y flechas; PAUSA / SALIR no roban el foco al canvas en uso normal.                                                                                      |
+| Audio bloqueado por la política de autoplay del navegador                                                | Los `<audio>` solo se disparan desde eventos de teclado (rotar / hard drop / lock…); `play()` va con `.catch(() => {})`. No hay reproducción antes del primer gesto del usuario.                       |
+| El tablero 3:4 deja letterbox horizontal dentro de `.crt-screen`                                         | `.tetris-stage` en grid `1fr auto 1fr`: el tablero (`aspect-ratio: 3/4`) va en la columna central y queda centrado; el NEXT en la columna derecha. No se reusa el `object-fit: contain` de asteroides. |
+| Los popups de combo dibujados en canvas tapan el tablero                                                 | Se dibujan en la franja superior con fondo semitransparente y fade corto (~900 ms), como el `#combo-popup` DOM del original.                                                                           |
+| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render             | Ambos `<canvas>` se montan vacíos; `createTetrisGame` solo toca `window` / DOM dentro de `useEffect`. Un criterio lo verifica.                                                                         |
+| Borrar `PLAYABLE_GAME_IDS` rompe algún consumidor no detectado                                           | El paso 1 hace `grep` de `PLAYABLE_GAME_IDS` e `isPlayable` antes de borrar; `isPlayable` conserva su firma (`id in GAME_REGISTRY`).                                                                   |
+| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                                    | Se commitea junto al trabajo; borrarlo del diff solo lo regenera (documentado en `CLAUDE.md` / `AGENTS.md`).                                                                                           |
 
 ---
 
@@ -525,7 +579,7 @@ registerPlay(game.id)` en `onGameOver`. Añadir `tetris: TetrisPlayer` a
 
 - Motor real para los otros 6 juegos simulados.
 - Reusar o poblar `caida` con este motor.
-- Skins, toggle de tema claro/oscuro y selector de nivel inicial del original.
+- Selector de nivel inicial del original.
 - Pausa interna con `P` / `Esc`.
 - Persistir líneas y mejor combo en el leaderboard; realtime en los rankings.
 - Responsive real del canvas (recalcular `COLS` / `ROWS` / `BLOCK` y la física).

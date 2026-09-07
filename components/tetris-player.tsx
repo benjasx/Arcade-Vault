@@ -3,9 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { createTetrisGame, type TetrisHandle } from "@/lib/games/tetris";
+import { createTetrisGame, type TetrisHandle, type SkinName } from "@/lib/games/tetris";
 import { registerPlay, submitScore } from "@/lib/leaderboard";
 import type { Game } from "@/lib/games";
+
+const SKIN_OPTIONS: { value: SkinName; label: string }[] = [
+  { value: "retro", label: "RETRO" },
+  { value: "neon", label: "NEÓN" },
+  { value: "pastel", label: "PASTEL" },
+  { value: "pixel", label: "PIXEL ART" },
+];
+
+/** Skin persistido en `localStorage`, o `null` si no hay/es inválido. */
+function readStoredSkin(): SkinName | null {
+  try {
+    const v = localStorage.getItem("tetris-skin");
+    return SKIN_OPTIONS.some((o) => o.value === v) ? (v as SkinName) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Reproductor del juego real TETRABYTE (solo para la entrada `tetris`).
@@ -32,6 +49,7 @@ export function TetrisPlayer({ game }: { game: Game }) {
   // acción en curso: bloquea el resto de botones y muestra spinner en el pulsado
   const [pending, setPending] = useState<"again" | "vault" | "login" | "exit" | null>(null);
   const [stats, setStats] = useState({ score: 0, lines: 0, level: 1, powerupLabel: "" });
+  const [skin, setSkin] = useState<SkinName>("retro");
   const locked = pending !== null || busy;
 
   useEffect(() => {
@@ -45,11 +63,30 @@ export function TetrisPlayer({ game }: { game: Game }) {
       onStats: (s) => setStats(s),
     });
     handleRef.current = h;
+    // Lee el skin guardado tras el montaje (no en el render: en SSR no hay
+    // `localStorage` y una lectura durante el render daría mismatch de
+    // hidratación). Aquí el setState puntual es correcto y necesario.
+    const stored = readStoredSkin();
+    if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSkin(stored);
+      h.setSkin(stored);
+    }
     return () => {
       h.destroy();
       handleRef.current = null;
     };
   }, [game.id]);
+
+  const changeSkin = (s: SkinName) => {
+    setSkin(s);
+    handleRef.current?.setSkin(s);
+    try {
+      localStorage.setItem("tetris-skin", s);
+    } catch {
+      /* localStorage no disponible */
+    }
+  };
 
   const togglePause = () => {
     const h = handleRef.current;
@@ -133,6 +170,19 @@ export function TetrisPlayer({ game }: { game: Game }) {
           </div>
         </div>
         <div className="hud-actions">
+          <select
+            className="hud-select"
+            aria-label="Skin del tablero"
+            value={skin}
+            onChange={(e) => changeSkin(e.target.value as SkinName)}
+            disabled={locked}
+          >
+            {SKIN_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
           <button className="btn yellow" onClick={togglePause} disabled={locked}>
             {paused ? "REANUDAR" : "PAUSA"}
           </button>
@@ -145,7 +195,7 @@ export function TetrisPlayer({ game }: { game: Game }) {
       <div className="crt">
         <div className="crt-screen tetris">
           <div className="tetris-stage">
-            <canvas ref={boardRef} className="tetris-board" width={300} height={600} />
+            <canvas ref={boardRef} className="tetris-board" width={450} height={600} />
             <canvas ref={nextRef} className="tetris-next" width={120} height={120} />
           </div>
           {paused && (
