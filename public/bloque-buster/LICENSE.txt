@@ -1,0 +1,16 @@
+Breakout spritesheet + sound effects — Kenney (www.kenney.nl)
+License: Creative Commons Zero, CC0
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Free to use in personal, educational and commercial projects. Crediting Kenney
+is appreciated but not required.
+
+Files in this folder are used by BLOQUE BUSTER (lib/games/bloque-buster.ts):
+
+  spritesheet-breakout.png   paddle / ball / block sprites + 4-frame break animation
+  break-sound.mp3            block hit
+  ball-bounce.mp3            wall / paddle bounce
+
+Ported from references/started-games/04-arkanoid/assets/ (assets/spritesheet-breakout.png,
+assets/sounds/). The origin folder ships no license file; treated as Kenney CC0 pending
+confirmation before publishing.
