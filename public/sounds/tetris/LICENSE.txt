@@ -1,0 +1,10 @@
+Impact Sounds (1.0) — Kenney (www.kenney.nl)
+License: Creative Commons Zero, CC0
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Free to use in personal, educational and commercial projects. Crediting Kenney
+is appreciated but not required.
+
+Files in this folder are a subset of the pack, used by TETRABYTE
+(lib/games/tetris.ts). Full pack + original license:
+references/started-games/03-claude-tetris/kenney_impact-sounds/
