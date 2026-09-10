@@ -7,6 +7,24 @@ import { createSnakeGame, type SnakeHandle } from "@/lib/games/snake";
 import { registerPlay, submitScore } from "@/lib/leaderboard";
 import type { Game } from "@/lib/games";
 
+type TouchMode = "hold" | "tap";
+
+interface TouchControl {
+  label: string; // glifo/etiqueta del botón
+  code: string; // KeyboardEvent.code que lee el motor
+  mode: TouchMode; // "hold" = tecla mantenida; "tap" = un flanco por pulsación
+}
+
+// Espejo 1:1 del teclado: el pad solo despacha KeyboardEvent sintéticos en
+// `window` y el motor ya escucha `window` por `e.code`. La dirección de snake
+// es discreta y encolada (un flanco por giro), así que los 4 botones son "tap".
+const TOUCH_CONTROLS: TouchControl[] = [
+  { label: "▲", code: "ArrowUp", mode: "tap" },
+  { label: "◀", code: "ArrowLeft", mode: "tap" },
+  { label: "▼", code: "ArrowDown", mode: "tap" },
+  { label: "▶", code: "ArrowRight", mode: "tap" },
+];
+
 /**
  * Reproductor del juego real NEONSNAKE (solo para la entrada `snake`).
  * Monta el controlador imperativo `createSnakeGame` dentro del marco CRT de la
@@ -21,6 +39,8 @@ export function SnakePlayer({ game }: { game: Game }) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<SnakeHandle | null>(null);
+  // `code`s con un keydown sintético pendiente de su keyup (pad táctil).
+  const heldRef = useRef<Set<string>>(new Set());
 
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
@@ -43,11 +63,27 @@ export function SnakePlayer({ game }: { game: Game }) {
       onStats: (s) => setStats(s),
     });
     handleRef.current = h;
+    const held = heldRef.current;
     return () => {
       h.destroy();
       handleRef.current = null;
+      // Suelta cualquier tecla sintética del pad que quedara sin keyup.
+      held.forEach((code) =>
+        window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true })),
+      );
+      held.clear();
     };
   }, [game.id]);
+
+  // ── Pad táctil: keydown / keyup sintéticos en `window`; el motor no se toca ──
+  const press = (code: string) => {
+    heldRef.current.add(code);
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+  };
+  const release = (code: string) => {
+    if (!heldRef.current.delete(code)) return;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true }));
+  };
 
   const togglePause = () => {
     const h = handleRef.current;
@@ -161,6 +197,24 @@ export function SnakePlayer({ game }: { game: Game }) {
           <span>{game.title} · CRT-83 · 60 HZ</span>
           <span>CARGA · 1MB</span>
         </div>
+      </div>
+
+      <div className="touch-controls dpad">
+        {TOUCH_CONTROLS.map((tc) => (
+          <button
+            key={tc.code}
+            type="button"
+            className="touch-btn"
+            onContextMenu={(e) => e.preventDefault()}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              press(tc.code);
+              if (tc.mode === "tap") requestAnimationFrame(() => release(tc.code));
+            }}
+          >
+            {tc.label}
+          </button>
+        ))}
       </div>
 
       {over && (
