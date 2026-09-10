@@ -1,9 +1,11 @@
 // ===== lib/games/flappy-ben.ts — controlador imperativo de Flappy-Ben =====
 //
-// Juego escrito desde cero (SPEC 10): `references/started-games/06-FlappyBer/`
-// no trae `game.js`, solo un atlas de sprites (`map.js` + `spritesheets.jpg`).
-// La mecánica, física y estado se implementan aquí directamente, guiados por
-// las coordenadas de ese atlas (portadas a `ATLAS` más abajo).
+// Juego escrito desde cero (SPEC 10). `references/started-games/06-FlappyBer/`
+// no trae `game.js`; solo traía un atlas de sprites (`map.js` + `spritesheets.jpg`)
+// cuyas coordenadas resultaron "estimadas" (según su propia cabecera) y no
+// correspondían al archivo real — recortaban trozos ilegibles de una hoja de
+// referencia. Por eso el juego se dibuja con formas vectoriales en canvas
+// (mismo enfoque que `lib/games/asteroids.ts`), no con sprites.
 //
 // No importa React ni JSX. Solo toca `window`/DOM a través del `canvas` que se
 // le pasa a `createFlappyBenGame`.
@@ -25,69 +27,33 @@ export interface FlappyBenHandle {
 }
 
 // Coordenadas internas fijas (no responsive); se escala por CSS en el componente.
-const W = 480;
-const H = 720;
+// Paisaje 4:3 (igual que asteroides): más ancho que alto, reutiliza el
+// `.crt-screen` por defecto sin letterbox lateral.
+const W = 800;
+const H = 600;
 
-interface SpriteRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-// Subconjunto de `window.FLAPPY_ATLAS` (references/started-games/06-FlappyBer/map.js)
-// portado como const tipada. `map.js` depende de un global de `window`, incompatible
-// con un módulo TS puro sin scope global.
-const ATLAS: {
-  src: string;
-  bird: Record<"flapping" | "resting" | "gliding", SpriteRect>;
-  pipe: Record<"top" | "bottom", SpriteRect>;
-  background: SpriteRect;
-  ground: SpriteRect;
-  numbers: Record<string, SpriteRect>;
-} = {
-  src: "/flappy-ben/sprite-sheet.jpg",
-  bird: {
-    flapping: { x: 35, y: 70, w: 65, h: 65 },
-    resting: { x: 135, y: 70, w: 65, h: 65 },
-    gliding: { x: 235, y: 70, w: 65, h: 65 },
-  },
-  pipe: {
-    top: { x: 140, y: 460, w: 85, h: 160 },
-    bottom: { x: 30, y: 460, w: 85, h: 160 },
-  },
-  background: { x: 800, y: 90, w: 1080, h: 220 },
-  ground: { x: 800, y: 640, w: 680, h: 100 },
-  numbers: {
-    "0": { x: 30, y: 840, w: 32, h: 45 },
-    "1": { x: 75, y: 840, w: 32, h: 45 },
-    "2": { x: 120, y: 840, w: 32, h: 45 },
-    "3": { x: 165, y: 840, w: 32, h: 45 },
-    "4": { x: 210, y: 840, w: 32, h: 45 },
-    "5": { x: 255, y: 840, w: 32, h: 45 },
-    "6": { x: 300, y: 840, w: 32, h: 45 },
-    "7": { x: 345, y: 840, w: 32, h: 45 },
-    "8": { x: 120, y: 900, w: 32, h: 45 },
-    "9": { x: 165, y: 900, w: 32, h: 45 },
-  },
-};
+// ── Paleta neón del portal (app/globals.css :root) ───────────────────────────
+const COLOR_CYAN = "#00f5ff";
+const COLOR_MAGENTA = "#ff006e";
+const COLOR_YELLOW = "#f5ff00";
+const COLOR_GREEN = "#00ff88";
 
 // ── Física y mundo ────────────────────────────────────────────────────────────
 const GRAVITY = 1500; // px/s²
 const FLAP_IMPULSE = -430; // px/s, impulso instantáneo (no acumulativo)
 const MAX_FALL_SPEED = 650; // px/s, velocidad terminal
-const FLAP_POSE_DURATION = 0.12; // s que se muestra la pose "flapping" tras aletear
+const FLAP_POSE_DURATION = 0.12; // s que se muestra el ala en alto tras aletear
 
-const BIRD_X = W * 0.3; // posición horizontal fija; el mundo se desplaza, no el pájaro
-const BIRD_DRAW = 56; // tamaño de dibujo del sprite (recorte de 65×65 del atlas)
-const BIRD_HITBOX = 40; // hitbox más pequeña que el sprite: colisión menos injusta
+const BIRD_X = W * 0.22; // posición horizontal fija; el mundo se desplaza, no el pájaro
+const BIRD_RADIUS = 20; // radio del cuerpo dibujado
+const BIRD_HITBOX = 34; // hitbox más pequeña que el sprite: colisión menos injusta
 
-const GROUND_H = 90; // alto de la franja de suelo dibujada y línea de colisión inferior
-const PIPE_WIDTH = 85; // ancho de tubería (nativo del atlas)
-const PIPE_GAP = 190; // hueco vertical del par de tuberías
-const PIPE_MARGIN = 90; // separación mínima del hueco respecto a techo/suelo
-const PIPE_SPEED = 170; // px/s
-const PIPE_SPAWN_INTERVAL = 1.5; // s entre pares de tuberías
+const GROUND_H = 70; // alto de la franja de suelo dibujada y línea de colisión inferior
+const PIPE_WIDTH = 70; // ancho de tubería
+const PIPE_GAP = 170; // hueco vertical del par de tuberías
+const PIPE_MARGIN = 70; // separación mínima del hueco respecto a techo/suelo
+const PIPE_SPEED = 200; // px/s (algo más rápido: hay más ancho de pantalla que recorrer)
+const PIPE_SPAWN_INTERVAL = 1.3; // s entre pares de tuberías
 const BG_SPEED = PIPE_SPEED * 0.25; // parallax: el fondo se mueve más lento que las tuberías
 
 const rand = (min: number, max: number): number => min + Math.random() * (max - min);
@@ -127,19 +93,6 @@ export function createFlappyBenGame(
   const ctx: CanvasRenderingContext2D = maybeCtx;
 
   const floorY = H - GROUND_H;
-
-  // ── Atlas ──────────────────────────────────────────────────────────────────
-  // El loop no arranca hasta que la imagen está lista (evita `drawImage` sobre
-  // una imagen sin decodificar); mientras tanto se pinta un fondo negro.
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, W, H);
-  const img = new Image();
-  let imgReady = false;
-  img.onload = () => {
-    imgReady = true;
-    startLoop();
-  };
-  img.src = ATLAS.src;
 
   // ── Input ──────────────────────────────────────────────────────────────────
   // Aletear es una acción instantánea (fija la velocidad vertical, no la
@@ -259,77 +212,139 @@ export function createFlappyBenGame(
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────────
-  /** Dibuja una tira del atlas escalada a `destH` y repetida para cubrir `W` con scroll. */
-  function drawTiledStrip(rect: SpriteRect, offsetPx: number, destY: number, destH: number) {
-    const scale = destH / rect.h;
-    const destW = rect.w * scale;
-    const x = -(((offsetPx % destW) + destW) % destW);
-    ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, x, destY, destW, destH);
-    ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, x + destW, destY, destW, destH);
+  function drawBackground() {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#140a24");
+    grad.addColorStop(1, "#0a0a18");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // rejilla de fondo con parallax lento, solo de adorno
+    const spacing = 60;
+    const offset = bgOffset % spacing;
+    ctx.strokeStyle = COLOR_CYAN;
+    ctx.globalAlpha = 0.07;
+    ctx.lineWidth = 1;
+    for (let x = -offset; x < W; x += spacing) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, floorY);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Cuerpo de tubería con un labio más ancho pegado al borde del hueco. */
+  function drawPipeSegment(x: number, y: number, w: number, h: number, lipAtBottom: boolean) {
+    if (h <= 0) return;
+    ctx.fillStyle = "rgba(0, 255, 136, 0.16)";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = COLOR_GREEN;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = COLOR_GREEN;
+    ctx.shadowBlur = 8;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+
+    const lipH = 14;
+    const lipY = lipAtBottom ? y + h - lipH : y;
+    ctx.fillStyle = "rgba(0, 255, 136, 0.28)";
+    ctx.fillRect(x - 6, lipY, w + 12, lipH);
+    ctx.strokeRect(x - 5, lipY + 1, w + 10, lipH - 2);
+    ctx.shadowBlur = 0;
   }
 
   function drawPipes() {
     for (const p of pipes) {
       const gapTop = p.gapY - PIPE_GAP / 2;
       const gapBottom = p.gapY + PIPE_GAP / 2;
-      const topRect = ATLAS.pipe.top;
-      ctx.drawImage(img, topRect.x, topRect.y, topRect.w, topRect.h, p.x, 0, PIPE_WIDTH, gapTop);
-      const bottomRect = ATLAS.pipe.bottom;
-      ctx.drawImage(
-        img,
-        bottomRect.x,
-        bottomRect.y,
-        bottomRect.w,
-        bottomRect.h,
-        p.x,
-        gapBottom,
-        PIPE_WIDTH,
-        floorY - gapBottom,
-      );
+      drawPipeSegment(p.x, 0, PIPE_WIDTH, gapTop, true);
+      drawPipeSegment(p.x, gapBottom, PIPE_WIDTH, floorY - gapBottom, false);
     }
   }
 
-  const NUM_DRAW_W = 26;
-  const NUM_DRAW_H = 36;
-  const NUM_GAP = 4;
+  function drawGround() {
+    ctx.fillStyle = "#141428";
+    ctx.fillRect(0, floorY, W, GROUND_H);
+
+    ctx.strokeStyle = COLOR_GREEN;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = COLOR_GREEN;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY);
+    ctx.lineTo(W, floorY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // marcas diagonales que se desplazan para dar sensación de movimiento
+    const tick = 26;
+    const offset = groundOffset % tick;
+    ctx.strokeStyle = "rgba(0, 255, 136, 0.35)";
+    ctx.lineWidth = 2;
+    for (let x = -offset; x < W + tick; x += tick) {
+      ctx.beginPath();
+      ctx.moveTo(x, floorY + 10);
+      ctx.lineTo(x - 10, floorY + GROUND_H - 6);
+      ctx.stroke();
+    }
+  }
+
+  function drawBird() {
+    const flapping = flapTimer > 0;
+    ctx.save();
+    ctx.translate(bird.x, bird.y);
+
+    ctx.shadowColor = COLOR_YELLOW;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = COLOR_YELLOW;
+    ctx.beginPath();
+    ctx.arc(0, 0, BIRD_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // ala
+    ctx.fillStyle = "#c98a00";
+    ctx.beginPath();
+    ctx.ellipse(-4, flapping ? -6 : 4, 10, 6, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // pico
+    ctx.fillStyle = "#ff8c1a";
+    ctx.beginPath();
+    ctx.moveTo(BIRD_RADIUS - 4, -4);
+    ctx.lineTo(BIRD_RADIUS + 9, 0);
+    ctx.lineTo(BIRD_RADIUS - 4, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // ojo
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(6, -6, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#111";
+    ctx.beginPath();
+    ctx.arc(8, -6, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
 
   function drawScore() {
-    const digits = String(score).split("");
-    const totalW = digits.length * NUM_DRAW_W + (digits.length - 1) * NUM_GAP;
-    let x = W / 2 - totalW / 2;
-    const y = 28;
-    for (const ch of digits) {
-      const rect = ATLAS.numbers[ch];
-      if (rect) ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, x, y, NUM_DRAW_W, NUM_DRAW_H);
-      x += NUM_DRAW_W + NUM_GAP;
-    }
+    ctx.textAlign = "center";
+    ctx.font = "bold 30px monospace";
+    ctx.shadowColor = COLOR_MAGENTA;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(score), W / 2, 48);
+    ctx.shadowBlur = 0;
   }
 
   function draw() {
-    if (!imgReady) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-      return;
-    }
-
-    drawTiledStrip(ATLAS.background, bgOffset, 0, H);
+    drawBackground();
     drawPipes();
-    drawTiledStrip(ATLAS.ground, groundOffset, floorY, GROUND_H);
-
-    const pose = flapTimer > 0 ? "flapping" : "gliding";
-    const sprite = ATLAS.bird[pose];
-    ctx.drawImage(
-      img,
-      sprite.x,
-      sprite.y,
-      sprite.w,
-      sprite.h,
-      bird.x - BIRD_DRAW / 2,
-      bird.y - BIRD_DRAW / 2,
-      BIRD_DRAW,
-      BIRD_DRAW,
-    );
-
+    drawGround();
+    drawBird();
     drawScore();
   }
 
@@ -346,7 +361,7 @@ export function createFlappyBenGame(
   };
 
   const startLoop = () => {
-    if (rafId !== null || !imgReady) return;
+    if (rafId !== null) return;
     lastTime = null;
     rafId = requestAnimationFrame(loop);
   };
@@ -356,6 +371,9 @@ export function createFlappyBenGame(
     cancelAnimationFrame(rafId);
     rafId = null;
   };
+
+  draw();
+  startLoop();
 
   return {
     pause: stopLoop,

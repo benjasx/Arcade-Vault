@@ -151,7 +151,7 @@ export function FlappyBenPlayer({ game }: { game: Game }) {
 
       <div className="crt">
         <div className="crt-screen">
-          <canvas ref={canvasRef} className="asteroids-canvas" width={480} height={720} />
+          <canvas ref={canvasRef} className="asteroids-canvas" width={800} height={600} />
           {paused && (
             <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
               <div>

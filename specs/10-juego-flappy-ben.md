@@ -157,13 +157,13 @@ Convenciones (heredadas de SPEC 05):
 
 ## Acceptance criteria
 
-- [ ] `/juego/flappy-ben/jugar` renderiza un `<canvas>` 480×720 con el juego real, no la arena simulada de `div`.
+- [x] `/juego/flappy-ben/jugar` renderiza un `<canvas>` 800×600 (paisaje, ver Enmienda 2) con el juego real, no la arena simulada de `div`.
 - [ ] `Space` y click/tap sobre el canvas aletean: el pájaro recibe un impulso vertical hacia arriba instantáneo.
 - [ ] La gravedad tira del pájaro hacia abajo constantemente cuando no se aletea.
 - [ ] Las tuberías se generan a intervalo horizontal fijo, se desplazan hacia la izquierda y desaparecen al salir del canvas.
 - [ ] Superar una tubería sin colisionar suma exactamente 1 punto.
 - [ ] Tocar una tubería, el suelo o el techo (`y < 0`) termina la partida.
-- [ ] El HUD (score) se dibuja en el canvas con los dígitos sprite del atlas (`ui.numbers`), no con texto plano.
+- [x] El HUD (score) se dibuja en el canvas como texto vectorial (`ctx.fillText`), no con un atlas de sprites (ver enmienda: `map.js` traía coordenadas "estimadas" inservibles).
 - [ ] Al llegar a game over se abre el modal "FIN DEL JUEGO" con la puntuación final; ninguna tecla reinicia el canvas por su cuenta.
 - [ ] Con sesión, "GUARDAR PUNTUACIÓN" llama a `submit_score` y muestra el toast `▸ PUNTUACIÓN GUARDADA_`; una segunda partida solo actualiza la fila si el score sube.
 - [ ] Sin sesión, el modal no tiene input de guardado; aparece el CTA a `/login`.
@@ -183,7 +183,7 @@ Convenciones (heredadas de SPEC 05):
 - **Sí:** id de catálogo nuevo `flappy-ben` — ninguno de los 8 ids sembrados (bloque-buster, caida, serpentina, gloton, invasores, rocas, ranaria, duelo-pixel) encaja temáticamente. Elegido por el usuario.
 - **Sí:** categoría `ARCADE`, color `magenta` — es el color menos saturado del catálogo actual (solo `caida` lo usa hoy). Elegido por el usuario.
 - **Sí:** juego escrito desde cero guiado por el atlas de sprites, no port de código — `references/started-games/06-FlappyBer/` no trae `game.js`, solo el mapa de coordenadas y la imagen. Verificado leyendo ambos archivos.
-- **Sí:** canvas interno **480×720** (retrato), distinto del 800×600 4:3 de asteroides/tetris. Los assets del atlas (fondo 1080×220, suelo 680×100) están pensados para una franja vertical de vuelo, no un formato ancho. Elegido por el usuario.
+- ~~**Sí:** canvas interno 480×720 (retrato).~~ Revertido en la Enmienda 2: pasa a 800×600 paisaje, igual que asteroides.
 - **Sí:** HUD de score en canvas con los dígitos sprite `ui.numbers`; se omite `onStats`. Flappy Bird no tiene vidas ni nivel — forzar ese contrato obligaría a inventar valores sin sentido en la fila `.player-hud`. Elegido por el usuario.
 - **No:** usar `ui.states.getReady`/`gameOver`, `ui.medals` o `ui.buttons` (start/restart/quit) del atlas. El modal "FIN DEL JUEGO" de la plataforma ya es el dueño de inicio y fin de partida, igual que en asteroides/tetris/snake; duplicar esa UI en el canvas descoordinaría el estado. Elegido por el usuario.
 - **Sí:** pájaro `birds.yellow`, tuberías `pipes.green`, fondo `environment.backgroundDay`. Variantes azul/rojo, tuberías naranjas y fondo noche quedan sin usar en esta spec. Elegido por el usuario.
@@ -192,24 +192,74 @@ Convenciones (heredadas de SPEC 05):
 - **Sí:** tocar suelo, techo o tubería termina la partida — fiel a la mecánica clásica de Flappy Bird. Elegido por el usuario.
 - **Sí:** auto-arranque en `"playing"` al montar, sin pantalla "listo" previa — coherente con descartar `ui.states.getReady` y con que los demás juegos portados también arrancan la partida al montar el componente.
 - **No:** dificultad progresiva (velocidad de tuberías o hueco variando con el score). Parámetros fijos para el MVP; balance queda fuera de scope.
-- **Sí:** proceder sin archivo de licencia para `spritesheets.jpg` (a diferencia del pack CC0 de asteroides, que sí trae `License.txt`). Riesgo asumido explícitamente por el usuario.
+
+### Enmienda durante la implementación: se descarta el atlas de sprites
+
+Al probar el Paso 7 en navegador, el fondo/pájaro/tuberías se veían como recortes
+aleatorios de una hoja de referencia con grid y texto ("GLIDING"), no como un
+spritesheet limpio. Causa: `map.js` dice literalmente en su cabecera
+"Coordenadas **estimadas** según la hoja de sprites generada" — nunca fueron
+coordenadas verificadas contra el archivo real, y no coinciden con
+`spritesheets.jpg`. Esto invalida las decisiones "Sí" de arriba sobre
+`birds.yellow`/`pipes.green`/`environment.backgroundDay`, `ui.numbers` y el
+`const ATLAS` tipado.
+
+- **No (revierte la decisión de arriba):** dibujar con el atlas de sprites.
+  `map.js` es inservible tal cual; usarlo exigiría medir manualmente cada recorte
+  sobre `spritesheets.jpg`, fuera de proporción con un MVP. Decisión del usuario,
+  con capturas de pantalla como evidencia.
+- **Sí:** pájaro, tuberías, fondo y HUD se dibujan como **vectores neón en
+  canvas** (`ctx.fillStyle`/`strokeStyle` + `shadowBlur` para el glow), en el
+  mismo estilo que `asteroids.ts` y el resto de motores del portal (ninguno de
+  los otros usa spritesheets). Paleta: pájaro amarillo (`--yellow #f5ff00`),
+  tuberías verdes (`--green #00ff88`), acentos cian/magenta (`--cyan #00f5ff`,
+  `--magenta #ff006e`) para fondo y HUD. Elegido por el usuario.
+- **Sí:** el HUD de score pasa a `ctx.fillText` con fuente monoespaciada (como
+  `drawHUD` en `asteroids.ts`), no dígitos sprite — ya no hay imagen de la que
+  recortarlos.
+- **No:** `public/flappy-ben/sprite-sheet.jpg` y el `const ATLAS`. Se eliminan
+  del controlador; `references/started-games/06-FlappyBer/{map.js,spritesheets.jpg}`
+  quedan solo como referencia histórica de por qué se descartó ese camino.
+- ~~**Sí:** el `<canvas>` pasa a ocupar todo el ancho disponible del `.crt-screen`
+  vía `.crt-screen.flappy-ben { aspect-ratio: 2/3 }`, manteniendo 480×720
+  retrato.~~ Superado por la siguiente enmienda: se cambia directamente el
+  formato interno a paisaje, sin necesidad de override de CSS.
+- ~~**Sí:** proceder sin archivo de licencia para `spritesheets.jpg`.~~ Sin objeto tras la enmienda: la imagen ya no se usa en el juego.
 - **Sí (heredado SPEC 05/06):** port a controlador imperativo TS (`createFlappyBenGame(canvas, opts) → handle`), guardado desde el modal de plataforma con `submitScore`, `pause()`/`resume()` con reset de `lastTime`, registro central `GAME_REGISTRY` (ya existente, solo se añade una entrada), y pad táctil que despacha `KeyboardEvent` sintéticos en `window` sin tocar el contrato del `Handle`.
+
+### Enmienda 2: canvas en paisaje (800×600), no retrato
+
+Con el render vectorial ya en pantalla, el usuario pidió explícitamente un área
+de juego más ancha que alta ("ESTA MUY LARGO... QUIERO QUE ESTE MAS ANCHO NO
+LARGO"). Se cambian las coordenadas internas de 480×720 (2:3 retrato) a
+**800×600 (4:3 paisaje)** — el mismo formato que `asteroids.ts` — con lo que
+`.crt-screen` vuelve a usar su `aspect-ratio: 4/3` por defecto y se retira el
+override `.crt-screen.flappy-ben` de la Enmienda 1 (ya no hace falta).
+
+- **Sí:** `W = 800`, `H = 600`. Reescala proporcionalmente `BIRD_X` (`W * 0.22`),
+  `GROUND_H` (70), `PIPE_GAP` (170), `PIPE_MARGIN` (70), y sube ligeramente
+  `PIPE_SPEED` (200 px/s) y baja `PIPE_SPAWN_INTERVAL` (1.3 s) para que el ritmo
+  de tuberías se sienta similar con más ancho de pantalla que recorrer. Elegido
+  por el usuario.
+- **No:** mantener `.crt-screen.flappy-ben` con `aspect-ratio: 2/3`. Ya no
+  aplica: el nuevo 800×600 encaja en el `.crt-screen` 4:3 por defecto sin
+  letterbox, igual que asteroides.
 
 ---
 
 ## Riesgos
 
-| Riesgo                                                                                                      | Mitigación                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `spritesheets.jpg` no tiene archivo de licencia ni consta su procedencia                                    | Documentado como decisión asumida por el usuario; si surge un reclamo, el asset se sustituye en otra spec sin tocar la lógica del motor.               |
-| La imagen del atlas tarda en cargar (`Image.onload` asíncrono) y el bucle arranca antes de tenerla lista    | `createFlappyBenGame` no llama a `startLoop()` hasta que `onload` resuelve; mientras tanto el canvas se pinta vacío/negro, sin errores de `drawImage`. |
-| Colisión pájaro↔tubería por bounding box exacto del sprite se siente injusta (hitbox más grande que el ave) | El motor usa una hitbox ligeramente menor que el sprite (margen fijo en píxeles), documentado como constante en el código, no ajustable desde fuera.   |
-| El array de tuberías crece sin límite si no se descartan al salir de pantalla                               | `update(dt)` filtra las tuberías con `x + w < 0` en cada frame antes de dibujar.                                                                       |
-| `requestAnimationFrame` o los listeners (`window` y `canvas`) sobreviven al desmontar                       | `createFlappyBenGame` guarda el id de rAF y las referencias de los handlers; `destroy()` las limpia. Un criterio lo verifica con SALIR.                |
-| `Space` o el click activan scroll de página o un botón enfocado                                             | El listener hace `preventDefault` en `Space`; el `click`/`mousedown` se registra solo sobre el `canvas`, no en `window`.                               |
-| Una tecla sintética del pad se queda "pegada" si el `pointerup` se pierde                                   | `heldRef` registra el `keydown` sintético pendiente; el cleanup del `useEffect` hace `release` de todo lo pendiente al desmontar.                      |
-| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render                | El `<canvas>` se monta vacío; `createFlappyBenGame` solo toca `window`/DOM dentro de `useEffect`.                                                      |
-| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                                       | Se commitea junto al trabajo (documentado en `CLAUDE.md` / `AGENTS.md`).                                                                               |
+| Riesgo                                                                                                           | Mitigación                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ~~`spritesheets.jpg` sin licencia~~ / ~~carga asíncrona de la imagen~~                                           | Sin objeto tras la enmienda: el motor ya no carga ninguna imagen, todo se dibuja como vectores.                                                              |
+| `map.js` traía coordenadas "estimadas" que no correspondían al spritesheet real (recortes ilegibles en pantalla) | Se descartó el atlas por completo; pájaro/tuberías/fondo/HUD se dibujan con formas vectoriales en la paleta neón del portal. Ver enmienda en `## Decisions`. |
+| Colisión pájaro↔tubería por bounding box exacto del sprite se siente injusta (hitbox más grande que el ave)      | El motor usa una hitbox ligeramente menor que el sprite (margen fijo en píxeles), documentado como constante en el código, no ajustable desde fuera.         |
+| El array de tuberías crece sin límite si no se descartan al salir de pantalla                                    | `update(dt)` filtra las tuberías con `x + w < 0` en cada frame antes de dibujar.                                                                             |
+| `requestAnimationFrame` o los listeners (`window` y `canvas`) sobreviven al desmontar                            | `createFlappyBenGame` guarda el id de rAF y las referencias de los handlers; `destroy()` las limpia. Un criterio lo verifica con SALIR.                      |
+| `Space` o el click activan scroll de página o un botón enfocado                                                  | El listener hace `preventDefault` en `Space`; el `click`/`mousedown` se registra solo sobre el `canvas`, no en `window`.                                     |
+| Una tecla sintética del pad se queda "pegada" si el `pointerup` se pierde                                        | `heldRef` registra el `keydown` sintético pendiente; el cleanup del `useEffect` hace `release` de todo lo pendiente al desmontar.                            |
+| Warnings de hidratación si el canvas o el modal derivan algo de `window` en el primer render                     | El `<canvas>` se monta vacío; `createFlappyBenGame` solo toca `window`/DOM dentro de `useEffect`.                                                            |
+| El bloque de agentes de `AGENTS.md` aparece como cambio sin commitear                                            | Se commitea junto al trabajo (documentado en `CLAUDE.md` / `AGENTS.md`).                                                                                     |
 
 ---
 
