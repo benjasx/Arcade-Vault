@@ -41,12 +41,53 @@ export interface SnakeHandle {
   destroy: () => void;
 }
 
+type Phase = "playing" | "dead";
+
+interface Vec {
+  x: number;
+  y: number;
+}
+
+interface Cell {
+  x: number;
+  y: number;
+}
+
 // Coordenadas internas fijas 1:1 (no responsive); se escala por CSS en el componente.
 const W = 528;
 const H = 528;
 
+// ---- Constantes (port literal del balance original) ----
+const GRID = 24; // celdas por lado
+const CELL = W / GRID; // 22 px
+const START_LEN = 4;
+const BASE_SPEED = 7; // pasos por segundo
+const SPEED_STEP = 0.35; // aceleración por comida
+const MAX_SPEED = 18;
+const POINTS_PER_FOOD = 10;
+
+const COLORS = {
+  head: "#5cffe4",
+  body: "#16f5e6",
+  bodyAlt: "#12c6bd",
+  food: "#ff2fb9",
+  grid: "rgba(22, 245, 230, 0.06)",
+};
+
 // Teclas cuyo comportamiento por defecto se cancela (scroll de página, etc.).
 const PREVENT_DEFAULT_KEYS = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
+// Mapa de dirección por `KeyboardEvent.code` (antes leía `e.key`).
+const KEY_DIRS: Record<string, Vec> = {
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  KeyW: { x: 0, y: -1 },
+  KeyS: { x: 0, y: 1 },
+  KeyA: { x: -1, y: 0 },
+  KeyD: { x: 1, y: 0 },
+};
 
 export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): SnakeHandle {
   if (typeof opts.onGameOver !== "function") {
@@ -64,30 +105,201 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
   }
   const ctx: CanvasRenderingContext2D = maybeCtx;
 
+  // ── Estado de la partida ───────────────────────────────────────────────────
+  let phase: Phase = "playing";
+  let snake: Cell[] = [];
+  let dir: Vec = { x: 1, y: 0 };
+  let nextDir: Vec = { x: 1, y: 0 };
+  let food: Cell = { x: 0, y: 0 };
+  let score = 0;
+  let stepMs = 1000 / BASE_SPEED;
+  let acc = 0;
+  let deathFlash = 0;
+  // Garantiza una única llamada a `opts.onGameOver` por partida.
+  let gameOverNotified = false;
+
+  function currentSpeed(): number {
+    return +(1000 / stepMs / BASE_SPEED).toFixed(1);
+  }
+
+  function placeFood() {
+    const free: Cell[] = [];
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (!snake.some((s) => s.x === x && s.y === y)) free.push({ x, y });
+      }
+    }
+    food = free[Math.floor(Math.random() * free.length)] || { x: 0, y: 0 };
+  }
+
+  function resetGame() {
+    const mid = Math.floor(GRID / 2);
+    snake = [];
+    for (let i = 0; i < START_LEN; i++) {
+      snake.push({ x: mid - i, y: mid });
+    }
+    dir = { x: 1, y: 0 };
+    nextDir = { x: 1, y: 0 };
+    score = 0;
+    stepMs = 1000 / BASE_SPEED;
+    acc = 0;
+    deathFlash = 0;
+    gameOverNotified = false;
+    phase = "playing";
+    placeFood();
+    opts.onStats({ score, speed: currentSpeed() });
+  }
+
+  function die() {
+    phase = "dead";
+    deathFlash = 1;
+    if (!gameOverNotified) {
+      gameOverNotified = true;
+      opts.onGameOver(score);
+    }
+  }
+
+  function step() {
+    // aplicar dirección encolada (sin giro de 180º)
+    if (nextDir.x !== -dir.x || nextDir.y !== -dir.y) dir = nextDir;
+
+    const head: Cell = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    const hitWall = head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID;
+    const hitSelf = snake.some((s, i) => i < snake.length - 1 && s.x === head.x && s.y === head.y);
+    if (hitWall || hitSelf) {
+      die();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+      score += POINTS_PER_FOOD;
+      stepMs = 1000 / Math.min(MAX_SPEED, BASE_SPEED + (score / POINTS_PER_FOOD) * SPEED_STEP);
+      placeFood();
+      opts.onStats({ score, speed: currentSpeed() });
+    } else {
+      snake.pop();
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  function drawGrid() {
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < GRID; i++) {
+      ctx.moveTo(i * CELL, 0);
+      ctx.lineTo(i * CELL, H);
+      ctx.moveTo(0, i * CELL);
+      ctx.lineTo(W, i * CELL);
+    }
+    ctx.stroke();
+  }
+
+  function roundRect(x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawCell(x: number, y: number, color: string, glow: number, inset = 0) {
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = glow;
+    ctx.fillStyle = color;
+    roundRect(x * CELL + inset, y * CELL + inset, CELL - inset * 2, CELL - inset * 2, 4);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawEyes(head: Cell) {
+    const cx = head.x * CELL;
+    const cy = head.y * CELL;
+    const r = CELL * 0.11;
+    const off = CELL * 0.28;
+    const fx = dir.x;
+    const fy = dir.y;
+    ctx.fillStyle = "#04040a";
+    const eyes =
+      fx !== 0
+        ? [
+            [off, off * 0.7],
+            [off, CELL - off * 0.7],
+          ]
+        : [
+            [off * 0.7, off],
+            [CELL - off * 0.7, off],
+          ];
+    // desplazar hacia la dirección de avance
+    const push = CELL * 0.12;
+    for (const [ex, ey] of eyes) {
+      ctx.beginPath();
+      ctx.arc(cx + ex + fx * push, cy + ey + fy * push, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function render(time: number) {
+    ctx.clearRect(0, 0, W, H);
+    drawGrid();
+
+    // comida pulsante
+    const pulse = 8 + Math.sin(time / 150) * 5;
+    drawCell(food.x, food.y, COLORS.food, pulse, 4);
+
+    // serpiente
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const seg = snake[i];
+      if (i === 0) {
+        drawCell(seg.x, seg.y, COLORS.head, 20, 1);
+        drawEyes(seg);
+      } else {
+        drawCell(seg.x, seg.y, i % 2 ? COLORS.bodyAlt : COLORS.body, 10, 2);
+      }
+    }
+
+    if (deathFlash > 0) {
+      ctx.fillStyle = `rgba(255, 47, 185, ${deathFlash * 0.4})`;
+      ctx.fillRect(0, 0, W, H);
+      deathFlash = Math.max(0, deathFlash - 0.05);
+    }
+  }
+
   // ── Input ──────────────────────────────────────────────────────────────────
   const onKeyDown = (e: KeyboardEvent) => {
     if (PREVENT_DEFAULT_KEYS.includes(e.code)) e.preventDefault();
+    if (phase !== "playing") return;
+    const d = KEY_DIRS[e.code];
+    if (d && (d.x !== -dir.x || d.y !== -dir.y)) nextDir = d;
   };
-  const onKeyUp = (_e: KeyboardEvent) => {};
+  const onKeyUp = () => {};
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
-
-  function resetGame() {
-    // TODO (paso 3): inicializar snake, dir, food, score, stepMs, acc.
-  }
-
-  function render() {
-    ctx.fillStyle = "#04040a";
-    ctx.fillRect(0, 0, W, H);
-  }
 
   // ── Loop ───────────────────────────────────────────────────────────────────
   let rafId: number | null = null;
   let lastTime: number | null = null;
 
   const loop = (time: number) => {
+    const dt = lastTime === null ? 0 : Math.min(100, time - lastTime);
     lastTime = time;
-    render();
+
+    if (phase === "playing") {
+      acc += dt;
+      while (acc >= stepMs) {
+        acc -= stepMs;
+        step();
+        if (phase !== "playing") break;
+      }
+    }
+
+    render(time);
     rafId = requestAnimationFrame(loop);
   };
 
@@ -104,7 +316,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
   };
 
   resetGame();
-  render();
+  render(performance.now());
   startLoop();
 
   return {
