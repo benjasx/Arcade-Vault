@@ -7,6 +7,18 @@ import { createFlappyBenGame, type FlappyBenHandle } from "@/lib/games/flappy-be
 import { registerPlay, submitScore } from "@/lib/leaderboard";
 import type { Game } from "@/lib/games";
 
+type TouchMode = "hold" | "tap";
+
+interface TouchControl {
+  label: string; // glifo/etiqueta del botón
+  code: string; // KeyboardEvent.code que lee el motor
+  mode: TouchMode; // "hold" = tecla mantenida; "tap" = un flanco por pulsación
+}
+
+// Un solo botón: aletear es una acción instantánea (fija la velocidad
+// vertical, no la acumula), así que no hay nada que "mantener".
+const TOUCH_CONTROLS: TouchControl[] = [{ label: "▲ ALETEAR", code: "Space", mode: "tap" }];
+
 /**
  * Reproductor del juego real de Flappy-Ben (entrada `flappy-ben`).
  * Monta el controlador imperativo `createFlappyBenGame` dentro del marco CRT de
@@ -20,6 +32,8 @@ export function FlappyBenPlayer({ game }: { game: Game }) {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<FlappyBenHandle | null>(null);
+  // `code`s con un keydown sintético pendiente de su keyup (pad táctil).
+  const heldRef = useRef<Set<string>>(new Set());
 
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
@@ -40,11 +54,27 @@ export function FlappyBenPlayer({ game }: { game: Game }) {
       },
     });
     handleRef.current = h;
+    const held = heldRef.current;
     return () => {
       h.destroy();
       handleRef.current = null;
+      // Suelta cualquier tecla sintética del pad que quedara sin keyup.
+      held.forEach((code) =>
+        window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true })),
+      );
+      held.clear();
     };
   }, [game.id]);
+
+  // ── Pad táctil: keydown / keyup sintéticos en `window`; el motor no se toca ──
+  const press = (code: string) => {
+    heldRef.current.add(code);
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true }));
+  };
+  const release = (code: string) => {
+    if (!heldRef.current.delete(code)) return;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code, bubbles: true }));
+  };
 
   const togglePause = () => {
     const h = handleRef.current;
@@ -148,6 +178,35 @@ export function FlappyBenPlayer({ game }: { game: Game }) {
           <span>{game.title} · CRT-83 · 60 HZ</span>
           <span>CARGA · 1MB</span>
         </div>
+      </div>
+
+      <div className="touch-controls">
+        {TOUCH_CONTROLS.map((tc) => {
+          const holdHandlers =
+            tc.mode === "hold"
+              ? {
+                  onPointerUp: () => release(tc.code),
+                  onPointerCancel: () => release(tc.code),
+                  onPointerLeave: () => release(tc.code),
+                }
+              : null;
+          return (
+            <button
+              key={tc.code}
+              type="button"
+              className="touch-btn"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                press(tc.code);
+                if (tc.mode === "tap") requestAnimationFrame(() => release(tc.code));
+              }}
+              {...holdHandlers}
+            >
+              {tc.label}
+            </button>
+          );
+        })}
       </div>
 
       {over && (
