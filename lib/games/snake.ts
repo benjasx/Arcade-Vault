@@ -62,9 +62,10 @@ const GRID = 24; // celdas por lado
 const CELL = W / GRID; // 22 px
 const START_LEN = 4;
 const BASE_SPEED = 7; // pasos por segundo
-const SPEED_STEP = 0.35; // aceleración por comida
+const SPEED_STEP = 0.35; // aceleración por nivel
 const MAX_SPEED = 18;
 const POINTS_PER_FOOD = 10;
+const FOOD_PER_LEVEL = 5; // comidas necesarias para subir de nivel
 
 const COLORS = {
   head: "#5cffe4",
@@ -178,6 +179,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
   let food: Cell = { x: 0, y: 0 };
   let foodFruit: FruitName = randomFruit();
   let score = 0;
+  let level = 0;
   let stepMs = 1000 / BASE_SPEED;
   let acc = 0;
   let deathFlash = 0;
@@ -208,6 +210,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
     dir = { x: 1, y: 0 };
     nextDir = { x: 1, y: 0 };
     score = 0;
+    level = 0;
     stepMs = 1000 / BASE_SPEED;
     acc = 0;
     deathFlash = 0;
@@ -243,7 +246,11 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
 
     if (head.x === food.x && head.y === food.y) {
       score += POINTS_PER_FOOD;
-      stepMs = 1000 / Math.min(MAX_SPEED, BASE_SPEED + (score / POINTS_PER_FOOD) * SPEED_STEP);
+      const newLevel = Math.floor(score / POINTS_PER_FOOD / FOOD_PER_LEVEL);
+      if (newLevel !== level) {
+        level = newLevel;
+        stepMs = 1000 / Math.min(MAX_SPEED, BASE_SPEED + level * SPEED_STEP);
+      }
       placeFood();
       opts.onStats({ score, speed: currentSpeed() });
     } else {
