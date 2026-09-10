@@ -74,6 +74,71 @@ const COLORS = {
   grid: "rgba(22, 245, 230, 0.06)",
 };
 
+// Fuera de la spec: sprites de fruta a pedido del usuario. Atlas port de
+// `references/started-games/05-snake/snake-assets/snake-assets/sprites.js`
+// (recortes detectados por análisis de píxeles sobre `fruits.png`, fondo
+// transparente). La imagen vive en `public/snake/fruits.png`.
+interface SpriteFrame {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const FRUITS = {
+  banana: { x: 34, y: 136, w: 110, h: 160 },
+  orange: { x: 186, y: 136, w: 150, h: 160 },
+  grape: { x: 378, y: 136, w: 110, h: 160 },
+  garlic: { x: 540, y: 136, w: 130, h: 160 },
+  eggplant: { x: 712, y: 136, w: 130, h: 160 },
+  strawberry: { x: 894, y: 136, w: 110, h: 160 },
+  cherry: { x: 1066, y: 136, w: 110, h: 160 },
+  carrot: { x: 1228, y: 136, w: 130, h: 160 },
+  mushroom: { x: 1400, y: 136, w: 130, h: 160 },
+  broccoli: { x: 1582, y: 136, w: 110, h: 160 },
+  watermelon: { x: 1734, y: 136, w: 150, h: 160 },
+  pepper: { x: 1906, y: 136, w: 150, h: 160 },
+  kiwi: { x: 2068, y: 136, w: 170, h: 160 },
+  lemon: { x: 2250, y: 136, w: 140, h: 160 },
+  peach: { x: 2432, y: 136, w: 130, h: 160 },
+  peanut: { x: 2604, y: 136, w: 130, h: 160 },
+  apple: { x: 2786, y: 136, w: 110, h: 160 },
+  tomato: { x: 2948, y: 136, w: 130, h: 160 },
+  berries: { x: 3110, y: 136, w: 150, h: 160 },
+  grapes2: { x: 3302, y: 136, w: 110, h: 160 },
+  pineapple: { x: 3454, y: 136, w: 150, h: 160 },
+  melon: { x: 3637, y: 136, w: 130, h: 160 },
+} satisfies Record<string, SpriteFrame>;
+
+type FruitName = keyof typeof FRUITS;
+const FRUIT_NAMES = Object.keys(FRUITS) as FruitName[];
+const randomFruit = (): FruitName => FRUIT_NAMES[Math.floor(Math.random() * FRUIT_NAMES.length)];
+
+// Carga perezosa y compartida entre partidas: se pinta a un canvas offscreen
+// (mismo patrón que `lib/games/bloque-buster.ts`) para que `drawImage` no
+// pague el coste de decodificación en cada frame. No bloquea el arranque de
+// la partida: mientras no esté lista, `drawFood` cae al círculo de la comida.
+let fruitsImg: HTMLCanvasElement | null = null;
+let fruitsLoading = false;
+
+function loadFruits() {
+  if (fruitsImg || fruitsLoading) return;
+  fruitsLoading = true;
+  const rawImg = new Image();
+  rawImg.onload = () => {
+    const oc = document.createElement("canvas");
+    oc.width = rawImg.width;
+    oc.height = rawImg.height;
+    const octx = oc.getContext("2d");
+    if (octx) octx.drawImage(rawImg, 0, 0);
+    fruitsImg = oc;
+  };
+  rawImg.onerror = () => {
+    fruitsLoading = false;
+  };
+  rawImg.src = "/snake/fruits.png";
+}
+
 // Teclas cuyo comportamiento por defecto se cancela (scroll de página, etc.).
 const PREVENT_DEFAULT_KEYS = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
@@ -111,6 +176,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
   let dir: Vec = { x: 1, y: 0 };
   let nextDir: Vec = { x: 1, y: 0 };
   let food: Cell = { x: 0, y: 0 };
+  let foodFruit: FruitName = randomFruit();
   let score = 0;
   let stepMs = 1000 / BASE_SPEED;
   let acc = 0;
@@ -130,6 +196,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
       }
     }
     food = free[Math.floor(Math.random() * free.length)] || { x: 0, y: 0 };
+    foodFruit = randomFruit();
   }
 
   function resetGame() {
@@ -218,6 +285,55 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
     ctx.restore();
   }
 
+  // Fuera de la spec: marco neón sobre el borde real del tablero (0,0)-(W,H)
+  // para que se vea dónde están los límites de movilidad, a pedido del usuario.
+  function drawBounds() {
+    ctx.save();
+    ctx.shadowColor = COLORS.head;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = COLORS.head;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, W - 3, H - 3);
+    ctx.restore();
+  }
+
+  function drawFood(time: number) {
+    const pulse = 8 + Math.sin(time / 150) * 5;
+    const cx = food.x * CELL + CELL / 2;
+    const cy = food.y * CELL + CELL / 2;
+
+    // halo magenta pulsante detrás de la fruta (o único elemento si aún no cargó)
+    ctx.save();
+    ctx.shadowColor = COLORS.food;
+    ctx.shadowBlur = pulse;
+    ctx.fillStyle = "rgba(255, 47, 185, 0.35)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, CELL * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (fruitsImg) {
+      const frame = FRUITS[foodFruit];
+      const box = CELL * 1.15;
+      const scale = Math.min(box / frame.w, box / frame.h);
+      const dw = frame.w * scale;
+      const dh = frame.h * scale;
+      ctx.drawImage(
+        fruitsImg,
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        cx - dw / 2,
+        cy - dh / 2,
+        dw,
+        dh,
+      );
+    } else {
+      drawCell(food.x, food.y, COLORS.food, pulse, 4);
+    }
+  }
+
   function drawEyes(head: Cell) {
     const cx = head.x * CELL;
     const cy = head.y * CELL;
@@ -248,10 +364,9 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
   function render(time: number) {
     ctx.clearRect(0, 0, W, H);
     drawGrid();
+    drawBounds();
 
-    // comida pulsante
-    const pulse = 8 + Math.sin(time / 150) * 5;
-    drawCell(food.x, food.y, COLORS.food, pulse, 4);
+    drawFood(time);
 
     // serpiente
     for (let i = snake.length - 1; i >= 0; i--) {
@@ -315,6 +430,7 @@ export function createSnakeGame(canvas: HTMLCanvasElement, opts: SnakeOptions): 
     rafId = null;
   };
 
+  loadFruits();
   resetGame();
   render(performance.now());
   startLoop();
