@@ -1,6 +1,6 @@
 # SPEC 09 — Cuarto juego real: NEONSNAKE (snake) en la nueva entrada "snake"
 
-> **Status:** Aprobado
+> **Status:** Implementado
 > **Depends on:** SPEC 05, SPEC 06
 > **Date:** 2026-09-06
 > **Objective:** Portar el juego canvas de `references/started-games/05-snake/game.js` a un controlador imperativo TypeScript montado en un componente cliente nuevo, asociado a una entrada de catálogo nueva `snake` (título visible NEONSNAKE), con el HUD escalar en la fila `.player-hud` de la plataforma y la puntuación final guardada por el modal de fin de juego.
