@@ -878,6 +878,21 @@ a {
   text-shadow: 0 0 8px var(--cyan);
 }
 
+/* FLAPPY-BEN: pájaro magenta atravesando un hueco entre tuberías verdes */
+.cover-flappy-ben {
+  background: linear-gradient(180deg, #2a0a24, #0a0a18 70%);
+}
+.cover-flappy-ben::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--green), var(--green)) 66% 8% / 20px 40px no-repeat,
+    linear-gradient(var(--green), var(--green)) 66% 60% / 20px 42px no-repeat,
+    radial-gradient(circle at 30% 42%, var(--magenta) 0 13px, transparent 14px);
+  filter: drop-shadow(0 0 8px rgba(255, 0, 200, 0.5));
+}
+
 /* ===== detail screen ===== */
 .av-detail {
   display: grid;
