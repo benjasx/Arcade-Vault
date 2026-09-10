@@ -722,6 +722,34 @@ a {
   filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.6));
 }
 
+/* NEONSNAKE: cuerpo segmentado cyan girando hacia un núcleo de comida magenta */
+.cover-neonsnake {
+  background: linear-gradient(135deg, #042023, #0a0a18 70%);
+}
+.cover-neonsnake::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) 18% 68% / 42px 20px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 33% 68% / 20px 20px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 33% 52% / 20px 20px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 33% 36% / 20px 20px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 48% 36% / 42px 20px no-repeat,
+    radial-gradient(circle at 78% 36%, var(--magenta) 0 9px, transparent 10px);
+  filter: drop-shadow(0 0 8px rgba(22, 245, 230, 0.5));
+  image-rendering: pixelated;
+}
+.cover-neonsnake::before {
+  content: "◆";
+  position: absolute;
+  left: 12%;
+  top: 12%;
+  color: var(--cyan);
+  font-size: 18px;
+  text-shadow: 0 0 8px var(--cyan);
+}
+
 .cover-glot {
   background: radial-gradient(circle at 50% 50%, #1a002a, #0a0a18);
 }
@@ -1187,6 +1215,33 @@ a {
   }
   .touch-controls .touch-btn:last-child {
     margin-left: auto;
+  }
+  /* NEONSNAKE: d-pad de 4 direcciones en cruz (▲ arriba, ◀ ▼ ▶ en la fila
+     central); anula el `margin-left: auto` heredado, pensado para el layout
+     "d-pad + acción" de los otros reproductores. */
+  .touch-controls.dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-areas:
+      ". up ."
+      "left down right";
+    justify-content: center;
+    gap: 10px;
+  }
+  .touch-controls.dpad .touch-btn:nth-child(1) {
+    grid-area: up;
+  }
+  .touch-controls.dpad .touch-btn:nth-child(2) {
+    grid-area: left;
+  }
+  .touch-controls.dpad .touch-btn:nth-child(3) {
+    grid-area: down;
+  }
+  .touch-controls.dpad .touch-btn:nth-child(4) {
+    grid-area: right;
+  }
+  .touch-controls.dpad .touch-btn:last-child {
+    margin-left: 0;
   }
 }
 
